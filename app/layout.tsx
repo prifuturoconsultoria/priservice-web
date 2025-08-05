@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { Toaster } from "@/components/ui/toaster"
 import { cookies } from "next/headers"
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/app-sidebar"
+import { AppSidebarServer } from "@/components/app-sidebar-server"
 import { createClient } from "@/utils/supabase/server"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -15,7 +15,13 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "PriService",
   description: "Sistema web simples de fichas de serviço usando Next.js e Supabase.",
-    generator: 'v0.dev'
+  generator: 'v0.dev',
+  icons: {
+    icon: '/icon.png',
+    apple: '/apple-icon.png',
+    shortcut: '/icon.png',
+  },
+  manifest: '/manifest.json',
 }
 
 export default async function RootLayout({
@@ -36,7 +42,7 @@ export default async function RootLayout({
       <body className={cn("min-h-screen bg-background font-sans antialiased", inter.className)}>
         {user ? (
           <SidebarProvider defaultOpen={defaultOpen}>
-            <AppSidebar />
+            <AppSidebarServer />
             <SidebarInset>
               <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
                 <SidebarTrigger />

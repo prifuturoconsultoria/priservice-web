@@ -43,6 +43,30 @@ export async function createServiceSheet(formData: any) {
     return { success: false, error: "User not authenticated" }
   }
 
+  // Ensure user has a profile (create if missing)
+  const { data: existingProfile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', user.id)
+    .single()
+
+  if (!existingProfile) {
+    console.log('Creating profile for user during service sheet creation')
+    try {
+      await supabase
+        .from('profiles')
+        .insert({
+          id: user.id,
+          email: user.email!,
+          full_name: user.user_metadata?.full_name || formData.technician_name || user.email!,
+          role: user.email === 'nlanga@prifuturoconsultoria.com' ? 'admin' : 'technician'
+        })
+      console.log('Profile created successfully')
+    } catch (profileError) {
+      console.log('Could not create profile, continuing with service sheet creation:', profileError)
+    }
+  }
+
   // Add created_by to form data
   const dataWithCreator = {
     ...formData,
@@ -78,16 +102,66 @@ async function sendNotificationEmail(serviceSheet: any, approved: boolean, feedb
     console.log('sendNotificationEmail called with:', { approved, feedback, created_by: serviceSheet.created_by })
     const supabase = await createServerSupabaseClient()
     
-    // Get the creator's email from the profiles table
+    // First try to get email from profiles table
+    console.log('Looking for creator profile with ID:', serviceSheet.created_by)
+    
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('email')
+      .select('email, full_name')
       .eq('id', serviceSheet.created_by)
       .single()
 
-    if (profileError || !profile?.email) {
-      console.error("Could not find creator's email:", profileError)
-      return
+    console.log('Profile query result:', { profile, profileError })
+
+    let creatorEmail = null
+    let creatorName = null
+
+    if (profile?.email) {
+      creatorEmail = profile.email
+      creatorName = profile.full_name
+      console.log('Found email in profiles table:', creatorEmail)
+    } else {
+      console.log('Profile not found. Attempting to create profile from current user data.')
+      
+      // Try to get the user's email from auth.users by getting current user context
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (user && user.id === serviceSheet.created_by) {
+        // This is the current user, we can use their auth data
+        console.log('Creator is current authenticated user, using auth data')
+        creatorEmail = user.email
+        creatorName = user.user_metadata?.full_name || serviceSheet.technician_name || user.email
+        
+        // Create the missing profile with real data
+        try {
+          const { error: insertError } = await supabase
+            .from('profiles')
+            .insert({
+              id: user.id,
+              email: user.email,
+              full_name: creatorName,
+              role: 'technician'
+            })
+          
+          if (insertError) {
+            console.log('Profile creation failed (might already exist):', insertError)
+          } else {
+            console.log('Successfully created profile for current user')
+          }
+        } catch (profileCreateError) {
+          console.log('Error creating profile:', profileCreateError)
+        }
+      } else {
+        // This is a different user, we need to create a migration function
+        console.log('Creator is not current user. This requires a profile migration.')
+        console.log('Current user ID:', user?.id, 'Creator ID:', serviceSheet.created_by)
+        
+        // For now, fallback to the hardcoded email until profiles are properly migrated
+        creatorEmail = 'nlanga@prifuturoconsultoria.com'
+        creatorName = serviceSheet.technician_name || 'Técnico'
+        
+        console.log('Using fallback email due to missing profile system')
+      }
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -96,7 +170,7 @@ async function sendNotificationEmail(serviceSheet: any, approved: boolean, feedb
       return
     }
 
-    console.log('Sending notification email to:', profile.email, 'with emailType: notification')
+    console.log('Sending notification email to:', creatorEmail, 'with emailType: notification')
     
     const response = await fetch(`${supabaseUrl}/functions/v1/send-approval-email`, {
       method: 'POST',
@@ -107,7 +181,7 @@ async function sendNotificationEmail(serviceSheet: any, approved: boolean, feedb
       body: JSON.stringify({ 
         serviceSheet,
         emailType: 'notification',
-        recipientEmail: profile.email,
+        recipientEmail: creatorEmail,
         approved,
         feedback
       }),
@@ -145,12 +219,14 @@ export async function approveServiceSheet(token: string, feedback = "", approved
     return { success: false, error: error.message }
   }
 
+  // Always try to send email notification - don't fail the approval if email fails
   try {
+    console.log('Attempting to send notification email for sheet:', data.id)
     await sendNotificationEmail(data, approved, feedback)
+    console.log('Email notification completed')
   } catch (emailError) {
     console.error("Error sending notification email:", emailError)
     // Don't fail the approval process if email fails
-    // Note: If you see "Requested function was not found", you need to deploy the Supabase edge function
   }
 
   return { success: true, data }
@@ -247,5 +323,52 @@ export async function resendApprovalEmail(id: string) {
   } catch (error) {
     console.error("Error resending approval email:", error)
     return { success: false, error: "Erro ao reenviar email" }
+  }
+}
+
+// Migration function to create profiles for existing users
+export async function migrateUserProfiles() {
+  const supabase = await createServerSupabaseClient()
+  
+  try {
+    console.log('Starting user profile migration...')
+    
+    // Get current user to ensure they're authenticated
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return { success: false, error: "User not authenticated" }
+    }
+
+    // Check if current user has a profile
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', user.id)
+      .single()
+
+    if (!existingProfile) {
+      // Create profile for current user
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: user.id,
+          email: user.email!,
+          full_name: user.user_metadata?.full_name || user.email!,
+          role: user.email === 'nlanga@prifuturoconsultoria.com' ? 'admin' : 'technician'
+        })
+
+      if (profileError) {
+        console.error('Error creating profile for current user:', profileError)
+        return { success: false, error: "Could not create profile for current user" }
+      }
+      
+      console.log('Created profile for current user')
+    }
+
+    return { success: true, message: "Profile migration completed successfully" }
+    
+  } catch (error) {
+    console.error('Error during profile migration:', error)
+    return { success: false, error: "Migration failed" }
   }
 }

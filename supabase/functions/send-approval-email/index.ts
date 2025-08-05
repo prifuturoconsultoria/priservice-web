@@ -20,9 +20,13 @@ serve(async (req) => {
   try {
     const { serviceSheet, emailType = 'approval', recipientEmail, approved, feedback } = await req.json()
     
+    console.log('=== EMAIL FUNCTION DEBUG v2.0 ===')
     console.log('Email function called with emailType:', emailType)
     console.log('Approved:', approved)
     console.log('RecipientEmail:', recipientEmail)
+    console.log('Will use notification template:', emailType === 'notification')
+    console.log('Request body keys:', Object.keys({ serviceSheet, emailType, recipientEmail, approved, feedback }))
+    console.log('==================================')
 
     if (!serviceSheet) {
       return new Response(JSON.stringify({ error: "Dados de serviceSheet faltando" }), {
@@ -53,7 +57,13 @@ serve(async (req) => {
 
     let htmlContent, textContent, subject, toEmail;
 
+    // Debug check - force log both comparisons
+    console.log('emailType value:', JSON.stringify(emailType))
+    console.log('emailType === "notification":', emailType === 'notification')
+    console.log('typeof emailType:', typeof emailType)
+    
     if (emailType === 'notification') {
+      console.log('>>> USING NOTIFICATION TEMPLATE <<<')
       // Notification email for status changes
       const status = approved ? 'aprovada' : 'rejeitada'
       const statusText = approved ? 'APROVADA' : 'REJEITADA'
@@ -177,6 +187,7 @@ Sistema de Gestão de Fichas de Serviço
 Esta é uma notificação automática
       `
     } else {
+      console.log('>>> USING APPROVAL TEMPLATE <<<')
       // Original approval email
       subject = `Aprovação de Ficha de Serviço - ${serviceSheet.project_name}`
       toEmail = serviceSheet.client_contact_email
@@ -261,6 +272,9 @@ Obrigado!
     }
 
     // Send email using Resend API
+    console.log('Sending email with subject:', subject)
+    console.log('To:', toEmail)
+    
     const emailResponse = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {

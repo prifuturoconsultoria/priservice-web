@@ -1,23 +1,18 @@
-phase 4
+Whethever you are doing on:
+ - /service-sheets main page
+ - Sidebar
+ -/admin/users
 
-- Configure  auth with supabase.  
-- Do not allow not authenticated user to acess the system other than the public pages, /login and approavals. 
+ You should stop, I dont want any loading, loading should only be when getiing data, so it should be on the table. 
 
-phase 5
-
-- Gere clientes (crud)
-- Listar no form de servicos
-- Gere projectos
-
-
-
-- Manage page access, techic and admin 
-
-phase 6
-- Improve the UI
- - add a custom header,
- - Use badges for status (portuguese)
- - Use charts 
+ if /pannel page is able to return metrics, recent recervices
+ If I can load service details page, forms, approavals page then:
+  - /service-sheets main page
+ - Sidebar
+ -/admin/users 
+ should have no problem loading, I dont want any loading on main page, or wait for mount, I dont want any timeouts, or ask user to refresh. Use the same apporach used to load those non problematic pages listed above. 
 
 
- phase 
+ Problem 2
+
+ Nao chega nenhum email feedback enviado para o criador do servico quando aprovado/rejeitado pelo cliente. 

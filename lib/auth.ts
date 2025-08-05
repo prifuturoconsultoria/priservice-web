@@ -26,7 +26,28 @@ export async function getUserProfile() {
     .from('profiles')
     .select('*')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
+    
+  // If profile doesn't exist, create it
+  if (!profile) {
+    try {
+      const { data: newProfile } = await supabase
+        .from('profiles')
+        .insert({
+          id: user.id,
+          email: user.email!,
+          full_name: user.user_metadata?.full_name || user.email!,
+          role: user.email === 'nlanga@prifuturoconsultoria.com' ? 'admin' : 'technician'
+        })
+        .select()
+        .single()
+      
+      return newProfile
+    } catch (error) {
+      console.error('Error creating profile:', error)
+      return null
+    }
+  }
     
   return profile
 }
