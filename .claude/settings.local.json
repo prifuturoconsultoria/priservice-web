@@ -5,7 +5,10 @@
       "Bash(supabase functions serve:*)",
       "Bash(ls:*)",
       "Bash(npx shadcn@latest add:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(supabase functions:*)",
+      "Bash(npx supabase functions deploy:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }

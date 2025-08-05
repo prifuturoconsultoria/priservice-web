@@ -73,31 +73,76 @@ export default function ServiceSheetsPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  // Check authentication
+  // Check authentication and fetch data
   useEffect(() => {
-    async function checkAuth() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/login");
-        return;
+    let mounted = true;
+    
+    async function checkAuthAndFetch() {
+      try {
+        console.log('Starting auth check...');
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        
+        console.log('Auth check result:', user ? 'User found' : 'No user');
+        
+        if (!mounted) return;
+        
+        if (!user) {
+          console.log('No user, redirecting to login');
+          router.push("/login");
+          return;
+        }
+        
+        setAuthChecked(true);
+        
+        console.log('Fetching service sheets...');
+        // Fetch data after auth check
+        const sheets = await getAllServiceSheets();
+        console.log('Service sheets fetched:', sheets?.length || 0);
+        
+        if (!mounted) return;
+        
+        // Ensure sheets is always an array
+        const safeSheets = Array.isArray(sheets) ? sheets : [];
+        setServiceSheets(safeSheets);
+        setFilteredSheets(safeSheets);
+        setLoading(false);
+        console.log('Loading complete');
+      } catch (error) {
+        console.error('Error loading service sheets:', error);
+        if (!mounted) return;
+        setLoading(false);
+        setAuthChecked(true); // Ensure we exit loading state
+        toast({
+          title: "Erro",
+          description: "Erro ao carregar fichas de serviço. Tente recarregar a página.",
+          variant: "destructive",
+        });
       }
-      setAuthChecked(true);
     }
-    checkAuth();
-  }, []);
-
-  useEffect(() => {
-    async function fetchData() {
-      if (!authChecked) return; // Wait for auth check
-      const sheets = await getAllServiceSheets();
-      setServiceSheets(sheets);
-      setFilteredSheets(sheets);
-      setLoading(false);
-    }
-    fetchData();
-  }, [authChecked]);
+    
+    checkAuthAndFetch();
+    
+    // Add a timeout fallback to prevent infinite loading (only for real issues)
+    const timeoutId = setTimeout(() => {
+      if (loading && mounted) {
+        console.warn('Loading timeout reached after 30 seconds, forcing state update');
+        setLoading(false);
+        setAuthChecked(true);
+        toast({
+          title: "Problema de Conexão",
+          description: "Verificação de conectividade necessária. Recarregue a página.",
+          variant: "destructive",
+        });
+      }
+    }, 30000); // 30 second timeout (only for real issues)
+    
+    return () => {
+      mounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, [router, supabase, toast, loading]);
 
   useEffect(() => {
     let filtered = serviceSheets;
@@ -235,7 +280,12 @@ export default function ServiceSheetsPage() {
 
   if (!authChecked || loading) {
     return (
-      <div className="flex justify-center items-center h-64">Carregando...</div>
+      <div className="flex justify-center items-center h-64">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <p className="text-muted-foreground">Carregando fichas de serviço...</p>
+        </div>
+      </div>
     );
   }
 

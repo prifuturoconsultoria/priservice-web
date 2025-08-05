@@ -4,9 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { getAllServiceSheets } from "@/lib/supabase"
 import { getUser, getUserProfile } from "@/lib/auth"
-import { format } from "date-fns"
+import { format, subDays, eachDayOfInterval, parseISO } from "date-fns"
 import { redirect } from 'next/navigation'
-import { TrendingUp, FileText, CheckCircle, XCircle, Clock, Activity, BarChart3, PieChart } from "lucide-react"
+import { TrendingUp, FileText, CheckCircle, XCircle, Clock, Activity, BarChart3, PieChart, Calendar } from "lucide-react"
+import { DashboardCharts } from "@/components/dashboard-charts"
 
 export default async function DashboardPage() {
   const user = await getUser()
@@ -27,6 +28,46 @@ export default async function DashboardPage() {
   const approvalRate = totalSheets > 0 ? (approvedSheets / totalSheets) * 100 : 0
   const pendingRate = totalSheets > 0 ? (pendingSheets / totalSheets) * 100 : 0
   const rejectionRate = totalSheets > 0 ? (rejectedSheets / totalSheets) * 100 : 0
+
+  // Prepare chart data
+  const statusData = [
+    { name: 'Aprovadas', value: approvedSheets, color: '#10b981' },
+    { name: 'Pendentes', value: pendingSheets, color: '#f59e0b' },
+    { name: 'Rejeitadas', value: rejectedSheets, color: '#ef4444' }
+  ]
+
+  // Activity data for last 7 days
+  const last7Days = eachDayOfInterval({
+    start: subDays(new Date(), 6),
+    end: new Date()
+  })
+
+  const activityData = last7Days.map(day => {
+    const dayStr = format(day, 'yyyy-MM-dd')
+    const sheetsForDay = serviceSheets.filter(sheet => 
+      format(parseISO(sheet.created_at), 'yyyy-MM-dd') === dayStr
+    ).length
+    return {
+      date: format(day, 'dd/MM'),
+      sheets: sheetsForDay,
+      day: format(day, 'EEEE').substring(0, 3)
+    }
+  })
+
+  // Monthly trend data
+  const monthlyData = []
+  for (let i = 5; i >= 0; i--) {
+    const date = subDays(new Date(), i * 30)
+    const monthSheets = serviceSheets.filter(sheet => {
+      const sheetDate = parseISO(sheet.created_at)
+      return sheetDate >= subDays(date, 30) && sheetDate <= date
+    }).length
+    
+    monthlyData.push({
+      month: format(date, 'MMM'),
+      sheets: monthSheets
+    })
+  }
 
   return (
     <div className="space-y-6">
@@ -101,16 +142,25 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
+      {/* Charts Section */}
+      <DashboardCharts 
+        statusData={statusData}
+        activityData={activityData}
+        monthlyData={monthlyData}
+        totalSheets={totalSheets}
+        approvalRate={approvalRate}
+      />
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {/* Status Distribution */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <PieChart className="h-5 w-5" />
-              Distribuição por Status
+              Distribuição Detalhada
             </CardTitle>
             <CardDescription>
-              Visão geral do status das fichas de serviço
+              Análise detalhada do status das fichas de serviço
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">

@@ -8,12 +8,13 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { createServiceSheet, updateServiceSheet } from "@/lib/supabase"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
+import { RichTextEditor } from "@/components/ui/rich-text-editor"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
+import { Send, Save } from "lucide-react"
 
 const formSchema = z.object({
   project_name: z.string().min(1, "Nome do projeto é obrigatório").max(100, "Nome muito longo"),
@@ -25,7 +26,7 @@ const formSchema = z.object({
   service_date: z.string().min(1, "Data do serviço é obrigatória"),
   start_time: z.string().min(1, "Hora de início é obrigatória"),
   end_time: z.string().min(1, "Hora de término é obrigatória"),
-  activity_description: z.string().min(10, "Descrição deve ter pelo menos 10 caracteres").max(1000, "Descrição muito longa"),
+  activity_description: z.string().min(10, "Descrição deve ter pelo menos 10 caracteres"),
 }).refine((data) => {
   if (data.start_time && data.end_time) {
     return data.start_time < data.end_time
@@ -224,7 +225,7 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
                     <FormItem>
                       <FormLabel className="text-sm font-medium">Telefone</FormLabel>
                       <FormControl>
-                        <Input type="tel" placeholder="(11) 99999-9999" {...field} />
+                        <Input type="tel" placeholder="841211212" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -293,15 +294,15 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
                   <FormItem>
                     <FormLabel className="text-sm font-medium">Descrição das Atividades *</FormLabel>
                     <FormControl>
-                      <Textarea 
+                      <RichTextEditor
+                        content={field.value}
+                        onChange={field.onChange}
                         placeholder="Descreva detalhadamente as atividades realizadas, problemas encontrados, soluções implementadas..."
-                        rows={8}
-                        className="resize-none"
-                        {...field}
+                        className="min-h-[250px]"
                       />
                     </FormControl>
                     <p className="text-xs text-muted-foreground">
-                      Mínimo 10 caracteres • {field.value?.length || 0}/1000
+                      Use a barra de ferramentas para formatar o texto
                     </p>
                     <FormMessage />
                   </FormItem>
@@ -321,7 +322,10 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
                       Salvando...
                     </>
                   ) : (
-                    isEditing ? "💾 Atualizar Ficha" : "📤 Enviar Ficha"
+                    <>
+                      {isEditing ? <Save className="mr-2 h-4 w-4" /> : <Send className="mr-2 h-4 w-4" />}
+                      {isEditing ? "Atualizar Ficha" : "Enviar Ficha"}
+                    </>
                   )}
                 </Button>
                 <Button 

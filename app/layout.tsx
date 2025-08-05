@@ -24,7 +24,8 @@ export default async function RootLayout({
   children: React.ReactNode
 }>) {
   const cookieStore = await cookies()
-  const defaultOpen = cookieStore.get("sidebar:state")?.value === "true"
+  const sidebarCookie = cookieStore.get("sidebar_state")?.value
+  const defaultOpen = sidebarCookie !== "false"
   
   // Check if user is authenticated
   const supabase = await createClient()

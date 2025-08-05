@@ -54,43 +54,69 @@ export function AppSidebar() {
   const supabase = createClient()
 
   useEffect(() => {
+    let mounted = true;
+    
     async function getUser() {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
-      
-      if (user) {
-        try {
-          // Get user profile with role - bypass RLS temporarily
-          const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('id, email, full_name, role')
-            .eq('id', user.id)
-            .maybeSingle()
-          
-          if (error) {
-            console.error('Erro ao carregar perfil:', error)
-            // Se falhar, criar o perfil
-            const { data: newProfile } = await supabase
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        
+        if (!mounted) return;
+        
+        if (userError) {
+          console.error('Error getting user:', userError)
+          setLoading(false)
+          return
+        }
+        
+        setUser(user)
+        
+        if (user) {
+          try {
+            // Get user profile with role
+            const { data: profile, error } = await supabase
               .from('profiles')
-              .insert({
-                id: user.id,
-                email: user.email!,
-                full_name: user.user_metadata?.full_name || user.email,
-                role: 'admin'
-              })
-              .select()
-              .single()
-            setProfile(newProfile)
-          } else {
-            setProfile(profile)
+              .select('id, email, full_name, role')
+              .eq('id', user.id)
+              .maybeSingle()
+            
+            if (!mounted) return;
+            
+            if (error) {
+              console.error('Erro ao carregar perfil:', error)
+              // Se falhar, criar o perfil
+              const { data: newProfile } = await supabase
+                .from('profiles')
+                .insert({
+                  id: user.id,
+                  email: user.email!,
+                  full_name: user.user_metadata?.full_name || user.email,
+                  role: 'admin'
+                })
+                .select()
+                .single()
+              
+              if (mounted) {
+                setProfile(newProfile)
+              }
+            } else {
+              setProfile(profile)
+            }
+          } catch (err) {
+            console.error('Erro crítico ao carregar perfil:', err)
           }
-        } catch (err) {
-          console.error('Erro crítico ao carregar perfil:', err)
+        }
+        
+        if (mounted) {
+          setLoading(false)
+        }
+      } catch (error) {
+        console.error('Critical error in getUser:', error)
+        if (mounted) {
+          setLoading(false)
         }
       }
-      
-      setLoading(false)
     }
+    
     getUser()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -117,7 +143,10 @@ export function AppSidebar() {
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [])
 
   const handleSignOut = async () => {
@@ -143,9 +172,24 @@ export function AppSidebar() {
   if (loading) {
     return (
       <Sidebar>
+        <SidebarHeader className="border-b border-sidebar-border">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <div className="flex items-center gap-2 px-2 py-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <span className="text-sm font-semibold">PS</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-semibold">PriService</span>
+                  <span className="text-xs text-muted-foreground">v1.0</span>
+                </div>
+              </div>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarHeader>
         <SidebarContent>
-          <div className="flex items-center justify-center p-4">
-            <span>...</span>
+          <div className="flex items-center justify-center p-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         </SidebarContent>
       </Sidebar>

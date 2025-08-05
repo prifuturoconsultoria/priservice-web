@@ -2,8 +2,9 @@ import { notFound, redirect } from "next/navigation"
 import { getServiceSheetById } from "@/lib/supabase"
 import ServiceSheetForm from "@/components/service-sheet-form"
 
-export default async function EditServiceSheetPage({ params }: { params: { id: string } }) {
-  const serviceSheet = await getServiceSheetById(params.id)
+export default async function EditServiceSheetPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
+  const serviceSheet = await getServiceSheetById(resolvedParams.id)
 
   if (!serviceSheet) {
     notFound()
@@ -11,7 +12,7 @@ export default async function EditServiceSheetPage({ params }: { params: { id: s
 
   // Only allow editing if not approved
   if (serviceSheet.status === "approved") {
-    redirect(`/service-sheets/${params.id}`)
+    redirect(`/service-sheets/${resolvedParams.id}`)
   }
 
   return (

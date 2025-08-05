@@ -72,6 +72,61 @@ export async function getServiceSheetByToken(token: string) {
   return data
 }
 
+// Helper function to send notification email about approval/rejection
+async function sendNotificationEmail(serviceSheet: any, approved: boolean, feedback: string) {
+  try {
+    console.log('sendNotificationEmail called with:', { approved, feedback, created_by: serviceSheet.created_by })
+    const supabase = await createServerSupabaseClient()
+    
+    // Get the creator's email from the profiles table
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', serviceSheet.created_by)
+      .single()
+
+    if (profileError || !profile?.email) {
+      console.error("Could not find creator's email:", profileError)
+      return
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!supabaseUrl) {
+      console.error("NEXT_PUBLIC_SUPABASE_URL is not set")
+      return
+    }
+
+    console.log('Sending notification email to:', profile.email, 'with emailType: notification')
+    
+    const response = await fetch(`${supabaseUrl}/functions/v1/send-approval-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ 
+        serviceSheet,
+        emailType: 'notification',
+        recipientEmail: profile.email,
+        approved,
+        feedback
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      console.error("Failed to send notification email:", errorData)
+      return
+    }
+
+    const result = await response.json()
+    console.log("Notification email sent successfully:", result)
+  
+  } catch (error) {
+    console.error("Error calling notification email function:", error)
+  }
+}
+
 export async function approveServiceSheet(token: string, feedback = "", approved = true) {
   const supabase = await createServerSupabaseClient()
   const { data, error } = await supabase
@@ -79,7 +134,7 @@ export async function approveServiceSheet(token: string, feedback = "", approved
     .update({
       status: approved ? "approved" : "rejected",
       client_feedback: feedback,
-      approved_at: approved ? new Date().toISOString() : null,
+      approved_at: new Date().toISOString(),
     })
     .eq("approval_token", token)
     .select()
@@ -89,6 +144,15 @@ export async function approveServiceSheet(token: string, feedback = "", approved
     console.error("Error updating service sheet status:", error)
     return { success: false, error: error.message }
   }
+
+  try {
+    await sendNotificationEmail(data, approved, feedback)
+  } catch (emailError) {
+    console.error("Error sending notification email:", emailError)
+    // Don't fail the approval process if email fails
+    // Note: If you see "Requested function was not found", you need to deploy the Supabase edge function
+  }
+
   return { success: true, data }
 }
 
