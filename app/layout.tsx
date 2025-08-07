@@ -14,7 +14,7 @@ const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "PriService",
-  description: "Sistema web simples de fichas de serviço usando Next.js e Supabase.",
+  description: "Sistema de fichas de serviço.",
   generator: 'v0.dev',
   icons: {
     icon: '/icon.png',
