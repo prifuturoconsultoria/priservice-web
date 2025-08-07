@@ -79,12 +79,14 @@ export default async function DashboardPage() {
             Bem-vindo de volta, {profile?.full_name || user.user_metadata?.full_name || user.email}
           </p>
         </div>
-        <Button asChild>
-          <Link href="/service-sheets/new">
-            <FileText className="mr-2 h-4 w-4" />
-            Nova Ficha
-          </Link>
-        </Button>
+        {profile?.role !== 'observer' && (
+          <Button asChild>
+            <Link href="/service-sheets/new">
+              <FileText className="mr-2 h-4 w-4" />
+              Nova Ficha
+            </Link>
+          </Button>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -276,10 +278,12 @@ export default async function DashboardPage() {
             ))}
             {serviceSheets.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
-                Nenhuma ficha de serviço encontrada. 
-                <Link href="/service-sheets/new" className="text-primary hover:underline ml-1">
-                  Crie a primeira ficha
-                </Link>
+                Nenhuma ficha de serviço encontrada.
+                {profile?.role !== 'observer' && (
+                  <Link href="/service-sheets/new" className="text-primary hover:underline ml-1">
+                    Crie a primeira ficha
+                  </Link>
+                )}
               </div>
             )}
           </div>

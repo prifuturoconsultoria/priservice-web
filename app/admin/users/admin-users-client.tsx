@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { migrateUserProfiles } from "@/lib/supabase"
 import { createUser } from "@/lib/admin"
+import { getRoleTranslation, getRoleOptions } from "@/lib/role-translations"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { UserPlus, Users, RefreshCw } from "lucide-react"
@@ -20,7 +21,7 @@ export function AdminUsersClient({ initialUsers }: { initialUsers: any[] }) {
     email: "",
     password: "",
     fullName: "",
-    role: "technician" as "admin" | "technician"
+    role: "technician" as "admin" | "technician" | "observer"
   })
   const router = useRouter()
 
@@ -156,7 +157,7 @@ export function AdminUsersClient({ initialUsers }: { initialUsers: any[] }) {
                     </Label>
                     <Select
                       value={createUserData.role}
-                      onValueChange={(value: "admin" | "technician") => 
+                      onValueChange={(value: "admin" | "technician" | "observer") => 
                         setCreateUserData(prev => ({ ...prev, role: value }))
                       }
                     >
@@ -164,8 +165,11 @@ export function AdminUsersClient({ initialUsers }: { initialUsers: any[] }) {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="technician">Técnico</SelectItem>
-                        <SelectItem value="admin">Administrador</SelectItem>
+                        {getRoleOptions().map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -237,9 +241,11 @@ export function AdminUsersClient({ initialUsers }: { initialUsers: any[] }) {
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                     user.role === 'admin' 
                       ? 'bg-blue-100 text-blue-800' 
+                      : user.role === 'observer'
+                      ? 'bg-purple-100 text-purple-800'
                       : 'bg-green-100 text-green-800'
                   }`}>
-                    {user.role || 'technician'}
+                    {getRoleTranslation(user.role || 'technician')}
                   </span>
                   {user.last_sign_in_at && (
                     <p className="text-xs text-muted-foreground mt-1">

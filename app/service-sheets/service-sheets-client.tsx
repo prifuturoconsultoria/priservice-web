@@ -50,9 +50,10 @@ import {
   getAllServiceSheets,
   deleteServiceSheet,
   resendApprovalEmail,
+  getCurrentUserProfile,
 } from "@/lib/supabase";
 import { format } from "date-fns";
-import { MoreHorizontal, Eye, Edit, Trash2, Mail, Search, Filter, Calendar, X, Sparkles, Download } from "lucide-react";
+import { MoreHorizontal, Eye, Edit, Trash2, Mail, Search, Filter, Calendar, X, Sparkles, Download, Clock, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { PDFGenerator } from "@/components/pdf-generator";
 import { useRouter } from "next/navigation";
@@ -66,13 +67,83 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
   const [filteredSheets, setFilteredSheets] = useState(initialData);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [projectFilter, setProjectFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [sortField, setSortField] = useState<'project' | 'date' | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const itemsPerPage = 8;
   const { toast } = useToast();
   const router = useRouter();
+
+  // Calculate hours difference
+  const calculateHours = (startTime: string, endTime: string): string => {
+    try {
+      const [startHour, startMinute] = startTime.split(':').map(Number);
+      const [endHour, endMinute] = endTime.split(':').map(Number);
+      
+      const startMinutes = startHour * 60 + startMinute;
+      const endMinutes = endHour * 60 + endMinute;
+      
+      let diffMinutes = endMinutes - startMinutes;
+      if (diffMinutes < 0) {
+        // Handle overnight work
+        diffMinutes += 24 * 60;
+      }
+      
+      const hours = Math.floor(diffMinutes / 60);
+      const minutes = diffMinutes % 60;
+      
+      if (minutes === 0) {
+        return `${hours}h`;
+      } else {
+        return `${hours}h${minutes.toString().padStart(2, '0')}m`;
+      }
+    } catch (error) {
+      return "N/A";
+    }
+  };
+
+  // Get unique projects for filter
+  const uniqueProjects = Array.from(new Set(serviceSheets.map(sheet => sheet.projects?.name).filter(Boolean)));
+
+  // Handle sorting
+  const handleSort = (field: 'project' | 'date') => {
+    if (sortField === field) {
+      // If clicking the same field, toggle direction
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // If clicking a different field, set new field with asc direction
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Get sort icon for a field
+  const getSortIcon = (field: 'project' | 'date') => {
+    if (sortField !== field) {
+      return <ChevronsUpDown className="h-3 w-3 text-muted-foreground" />;
+    }
+    return sortDirection === 'asc' 
+      ? <ChevronUp className="h-3 w-3 text-blue-600" />
+      : <ChevronDown className="h-3 w-3 text-blue-600" />;
+  };
+
+  // Load user profile to check permissions
+  useEffect(() => {
+    async function loadUserProfile() {
+      try {
+        const profile = await getCurrentUserProfile();
+        setUserProfile(profile);
+      } catch (error) {
+        console.error('Error loading user profile:', error);
+      }
+    }
+    loadUserProfile();
+  }, []);
 
   useEffect(() => {
     let filtered = serviceSheets;
@@ -92,13 +163,36 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
       filtered = filtered.filter((sheet) => sheet.status === statusFilter);
     }
 
+    if (projectFilter !== "all") {
+      filtered = filtered.filter((sheet) => sheet.projects?.name === projectFilter);
+    }
+
     if (dateFilter) {
       filtered = filtered.filter((sheet) => sheet.service_date === dateFilter);
     }
 
+    // Apply sorting
+    if (sortField) {
+      filtered.sort((a, b) => {
+        let aValue, bValue;
+        
+        if (sortField === 'project') {
+          aValue = a.projects?.name || '';
+          bValue = b.projects?.name || '';
+        } else if (sortField === 'date') {
+          aValue = new Date(a.service_date);
+          bValue = new Date(b.service_date);
+        }
+        
+        if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
     setFilteredSheets(filtered);
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, dateFilter, serviceSheets]);
+  }, [searchTerm, statusFilter, projectFilter, dateFilter, serviceSheets, sortField, sortDirection]);
 
   const totalPages = Math.ceil(filteredSheets.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -192,46 +286,61 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
     <>
       {/* Filters Section */}
       <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-        <CardHeader className="pb-4">
+        <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2 text-blue-900">
-                <Search className="h-5 w-5" />
+              <CardTitle className="flex items-center gap-2 text-blue-900 text-base">
+                <Search className="h-4 w-4" />
                 Filtros e Busca
               </CardTitle>
             </div>
-            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+            <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs">
               {filteredSheets.length} resultado{filteredSheets.length !== 1 ? "s" : ""}
             </Badge>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <div className="md:col-span-2">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   placeholder="Buscar por projeto, técnico ou cliente..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 h-11 bg-white border-blue-200 focus:border-blue-400 focus:ring-blue-200"
+                  className="pl-8 h-9 text-sm bg-white border-blue-200 focus:border-blue-400 focus:ring-blue-200"
                 />
                 {searchTerm && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0 hover:bg-blue-100"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5 p-0 hover:bg-blue-100"
                     onClick={() => setSearchTerm("")}
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-3 w-3" />
                   </Button>
                 )}
               </div>
             </div>
 
+            <Select value={projectFilter} onValueChange={setProjectFilter}>
+              <SelectTrigger className="h-9 text-sm bg-white border-blue-200 focus:border-blue-400 focus:ring-blue-200">
+                <Filter className="h-3.5 w-3.5 mr-1.5" />
+                <SelectValue placeholder="Projeto" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os Projetos</SelectItem>
+                {uniqueProjects.map((project) => (
+                  <SelectItem key={project} value={project}>
+                    {project}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-11 bg-white border-blue-200 focus:border-blue-400 focus:ring-blue-200">
-                <Filter className="h-4 w-4 mr-2" />
+              <SelectTrigger className="h-9 text-sm bg-white border-blue-200 focus:border-blue-400 focus:ring-blue-200">
+                <Filter className="h-3.5 w-3.5 mr-1.5" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -243,42 +352,47 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
             </Select>
 
             <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Calendar className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 type="date"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="pl-10 h-11 bg-white border-blue-200 focus:border-blue-400 focus:ring-blue-200"
+                className="pl-8 h-9 text-sm bg-white border-blue-200 focus:border-blue-400 focus:ring-blue-200"
               />
               {dateFilter && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0 hover:bg-blue-100"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5 p-0 hover:bg-blue-100"
                   onClick={() => setDateFilter("")}
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3 w-3" />
                 </Button>
               )}
             </div>
           </div>
 
-          {(searchTerm || statusFilter !== "all" || dateFilter) && (
-            <div className="flex items-center justify-between mt-4 pt-4 border-t border-blue-200">
-              <div className="flex items-center gap-2 text-sm text-blue-700">
+          {(searchTerm || statusFilter !== "all" || projectFilter !== "all" || dateFilter) && (
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-blue-200">
+              <div className="flex items-center gap-2 text-xs text-blue-700">
                 <span>Filtros ativos:</span>
                 {searchTerm && (
-                  <Badge variant="outline" className="bg-white border-blue-300 text-blue-800">
+                  <Badge variant="outline" className="bg-white border-blue-300 text-blue-800 text-xs px-2 py-0">
                     Busca: "{searchTerm}"
                   </Badge>
                 )}
+                {projectFilter !== "all" && (
+                  <Badge variant="outline" className="bg-white border-blue-300 text-blue-800 text-xs px-2 py-0">
+                    Projeto: {projectFilter}
+                  </Badge>
+                )}
                 {statusFilter !== "all" && (
-                  <Badge variant="outline" className="bg-white border-blue-300 text-blue-800">
+                  <Badge variant="outline" className="bg-white border-blue-300 text-blue-800 text-xs px-2 py-0">
                     Status: {statusFilter === "pending" ? "Pendente" : statusFilter === "approved" ? "Aprovado" : "Rejeitado"}
                   </Badge>
                 )}
                 {dateFilter && (
-                  <Badge variant="outline" className="bg-white border-blue-300 text-blue-800">
+                  <Badge variant="outline" className="bg-white border-blue-300 text-blue-800 text-xs px-2 py-0">
                     Data: {format(new Date(dateFilter), "dd/MM/yyyy")}
                   </Badge>
                 )}
@@ -289,11 +403,12 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
                 onClick={() => {
                   setSearchTerm("");
                   setStatusFilter("all");
+                  setProjectFilter("all");
                   setDateFilter("");
                 }}
-                className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50"
+                className="bg-white border-blue-300 text-blue-700 hover:bg-blue-50 h-7 text-xs"
               >
-                <Sparkles className="h-4 w-4 mr-1" />
+                <Sparkles className="h-3 w-3 mr-1" />
                 Limpar Filtros
               </Button>
             </div>
@@ -326,10 +441,40 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Projeto</TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleSort('project')}
+                          className="h-auto p-0 font-semibold hover:bg-transparent"
+                        >
+                          <div className="flex items-center gap-1">
+                            Projeto
+                            {getSortIcon('project')}
+                          </div>
+                        </Button>
+                      </TableHead>
                       <TableHead>Técnico</TableHead>
                       <TableHead>Cliente</TableHead>
-                      <TableHead>Data</TableHead>
+                      <TableHead>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleSort('date')}
+                          className="h-auto p-0 font-semibold hover:bg-transparent"
+                        >
+                          <div className="flex items-center gap-1">
+                            Data
+                            {getSortIcon('date')}
+                          </div>
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Clock className="h-4 w-4" />
+                          Total de Horas
+                        </div>
+                      </TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
@@ -345,6 +490,11 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
                         <TableCell>{sheet.profiles?.full_name || 'N/A'}</TableCell>
                         <TableCell>{sheet.projects?.company || 'N/A'}</TableCell>
                         <TableCell>{format(new Date(sheet.service_date), "dd/MM/yyyy")}</TableCell>
+                        <TableCell className="text-center font-mono">
+                          <Badge variant="outline" className="bg-blue-50 border-blue-200 text-blue-700">
+                            {calculateHours(sheet.start_time, sheet.end_time)}
+                          </Badge>
+                        </TableCell>
                         <TableCell>
                           <Badge variant={getStatusBadgeVariant(sheet.status)}>
                             {getStatusLabel(sheet.status)}
@@ -363,69 +513,102 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem asChild>
-                                <Link href={`/service-sheets/${sheet.id}`} className="flex items-center">
-                                  <Eye className="mr-2 h-4 w-4" />
-                                  Ver Detalhes
-                                </Link>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem asChild>
-                                <div className="w-full">
-                                  <PDFGenerator 
-                                    serviceSheet={sheet}
-                                    variant="ghost" 
-                                    size="sm"
-                                    className="w-full justify-start p-0 h-auto"
-                                  />
-                                </div>
-                              </DropdownMenuItem>
-                              {sheet.status !== "approved" && (
+                              {/* Observer: only view details and download report */}
+                              {userProfile?.role === 'observer' ? (
                                 <>
                                   <DropdownMenuItem asChild>
-                                    <Link href={`/service-sheets/${sheet.id}/edit`} className="flex items-center">
-                                      <Edit className="mr-2 h-4 w-4" />
-                                      Editar
+                                    <Link href={`/service-sheets/${sheet.id}`} className="flex items-center">
+                                      <Eye className="mr-2 h-4 w-4" />
+                                      Ver Detalhes
                                     </Link>
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => handleResendEmail(sheet.id)}
-                                    disabled={resendingId === sheet.id}
-                                  >
-                                    <Mail className="mr-2 h-4 w-4" />
-                                    {resendingId === sheet.id ? "Reenviando..." : "Reenviar Email"}
+                                  <DropdownMenuItem asChild>
+                                    <div className="w-full">
+                                      <PDFGenerator 
+                                        serviceSheet={sheet}
+                                        variant="ghost" 
+                                        size="sm"
+                                        className="w-full justify-start p-0 h-auto"
+                                      />
+                                    </div>
                                   </DropdownMenuItem>
                                 </>
-                              )}
-                              <DropdownMenuSeparator />
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    onSelect={(e) => e.preventDefault()}
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Excluir
+                              ) : (
+                                <>
+                                  {/* Admin and Technician: full access (with restrictions) */}
+                                  <DropdownMenuItem asChild>
+                                    <Link href={`/service-sheets/${sheet.id}`} className="flex items-center">
+                                      <Eye className="mr-2 h-4 w-4" />
+                                      Ver Detalhes
+                                    </Link>
                                   </DropdownMenuItem>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Esta ação não pode ser desfeita. Isso excluirá permanentemente a ficha de serviço "{sheet.projects?.name || 'N/A'}".
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => handleDelete(sheet.id)}
-                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                      disabled={deletingId === sheet.id}
-                                    >
-                                      {deletingId === sheet.id ? "Excluindo..." : "Excluir"}
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                                  <DropdownMenuItem asChild>
+                                    <div className="w-full">
+                                      <PDFGenerator 
+                                        serviceSheet={sheet}
+                                        variant="ghost" 
+                                        size="sm"
+                                        className="w-full justify-start p-0 h-auto"
+                                      />
+                                    </div>
+                                  </DropdownMenuItem>
+                                  
+                                  {/* Edit and Email actions - only if not approved and user has permission */}
+                                  {sheet.status !== "approved" && userProfile?.role === 'admin' && (
+                                    <>
+                                      <DropdownMenuItem asChild>
+                                        <Link href={`/service-sheets/${sheet.id}/edit`} className="flex items-center">
+                                          <Edit className="mr-2 h-4 w-4" />
+                                          Editar
+                                        </Link>
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => handleResendEmail(sheet.id)}
+                                        disabled={resendingId === sheet.id}
+                                      >
+                                        <Mail className="mr-2 h-4 w-4" />
+                                        {resendingId === sheet.id ? "Reenviando..." : "Reenviar Email"}
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+                                  
+                                  {/* Delete action - only for admins */}
+                                  {userProfile?.role === 'admin' && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                          <DropdownMenuItem
+                                            className="text-destructive focus:text-destructive"
+                                            onSelect={(e) => e.preventDefault()}
+                                          >
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            Excluir
+                                          </DropdownMenuItem>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                          <AlertDialogHeader>
+                                            <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                              Esta ação não pode ser desfeita. Isso excluirá permanentemente a ficha de serviço "{sheet.projects?.name || 'N/A'}".
+                                            </AlertDialogDescription>
+                                          </AlertDialogHeader>
+                                          <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                            <AlertDialogAction
+                                              onClick={() => handleDelete(sheet.id)}
+                                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                              disabled={deletingId === sheet.id}
+                                            >
+                                              {deletingId === sheet.id ? "Excluindo..." : "Excluir"}
+                                            </AlertDialogAction>
+                                          </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                      </AlertDialog>
+                                    </>
+                                  )}
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>

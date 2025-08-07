@@ -44,12 +44,27 @@ export async function AppSidebarServer() {
     )
   }
 
+  // Filter menu items based on user role
+  let filteredMainItems = mainItems;
+  let filteredSecondaryItems = secondaryItems;
+
+  if (profile?.role === 'observer') {
+    // Observers can only see Dashboard and Service Sheets
+    filteredMainItems = mainItems; // Keep all main items (Dashboard and Service Sheets)
+    filteredSecondaryItems = []; // Remove all secondary items (Projects, Users)
+  } else if (profile?.role === 'technician') {
+    // Technicians can see everything except Users
+    filteredMainItems = mainItems;
+    filteredSecondaryItems = secondaryItems.filter(item => item.url !== '/admin/users');
+  }
+  // Admins see everything (no filtering needed)
+
   return (
     <AppSidebarClient 
       user={user}
       profile={profile}
-      mainItems={mainItems}
-      secondaryItems={secondaryItems}
+      mainItems={filteredMainItems}
+      secondaryItems={filteredSecondaryItems}
     />
   )
 }

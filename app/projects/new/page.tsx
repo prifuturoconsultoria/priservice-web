@@ -1,6 +1,18 @@
 import ProjectForm from "@/components/project-form"
+import { getUser, getUserProfile } from "@/lib/auth"
+import { redirect } from "next/navigation"
 
-export default function NewProjectPage() {
+export default async function NewProjectPage() {
+  const user = await getUser()
+  if (!user) {
+    redirect('/login')
+  }
+
+  const profile = await getUserProfile()
+  if (profile?.role === 'observer') {
+    redirect('/')
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <ProjectForm />

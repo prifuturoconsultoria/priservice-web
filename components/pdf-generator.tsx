@@ -30,7 +30,7 @@ export function PDFGenerator({ serviceSheet, variant = "outline", className, siz
         <html>
           <head>
             <meta charset="utf-8">
-            <title>Relatório de Intervenção - ${serviceSheet.subject || serviceSheet.projects?.name || 'Ficha de Serviço'}</title>
+            <title></title>
             <style>
               @page {
                 margin: 2cm;
@@ -278,7 +278,7 @@ export function PDFGenerator({ serviceSheet, variant = "outline", className, siz
           </head>
           <body>
             <div class="header">
-              <img src="/prifuturo.png" alt="Prifuturo Logo" class="logo-top" />
+              <img src="/logo2.png" alt="Prifuturo Logo" class="logo-top" />
               <h1>Relatório de Intervenção</h1>
               <div class="subtitle">Sistema de Gestão de Fichas de Serviço</div>
               <div class="status-badge status-${serviceSheet.status}">

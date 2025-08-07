@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getAllProjects } from "@/lib/supabase";
-import { getUser } from "@/lib/auth";
+import { getUser, getUserProfile } from "@/lib/auth";
 import { redirect } from 'next/navigation';
 import { ProjectsClient } from "./projects-client";
 
@@ -9,6 +9,11 @@ export default async function ProjectsPage() {
   const user = await getUser()
   if (!user) {
     redirect('/login')
+  }
+
+  const profile = await getUserProfile()
+  if (profile?.role === 'observer') {
+    redirect('/')
   }
   
   const projects = await getAllProjects()

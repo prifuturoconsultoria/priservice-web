@@ -3,7 +3,7 @@
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { getServiceSheetById, deleteServiceSheet, resendApprovalEmail } from "@/lib/supabase"
+import { getServiceSheetById, deleteServiceSheet, resendApprovalEmail, getCurrentUserProfile } from "@/lib/supabase"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
@@ -28,21 +28,27 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
   const [resending, setResending] = useState(false)
+  const [userProfile, setUserProfile] = useState<any>(null)
   const router = useRouter()
   const { toast } = useToast()
 
   useEffect(() => {
     let mounted = true;
     
-    async function fetchServiceSheet() {
+    async function fetchData() {
       try {
-        const sheet = await getServiceSheetById(resolvedParams.id)
+        const [sheet, profile] = await Promise.all([
+          getServiceSheetById(resolvedParams.id),
+          getCurrentUserProfile()
+        ])
+        
         if (mounted) {
           setServiceSheet(sheet)
+          setUserProfile(profile)
           setLoading(false)
         }
       } catch (error) {
-        console.error('Error fetching service sheet:', error)
+        console.error('Error fetching data:', error)
         if (mounted) {
           setLoading(false)
           toast({
@@ -54,7 +60,7 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
       }
     }
     
-    fetchServiceSheet()
+    fetchData()
     
     return () => {
       mounted = false;
@@ -167,10 +173,10 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted/20">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="container mx-auto px-4 py-4 max-w-7xl">
         {/* Breadcrumb & Back Navigation */}
-        <nav className="mb-8">
-          <Button asChild variant="ghost" size="sm" className="mb-4 -ml-2">
+        <nav className="mb-4">
+          <Button asChild variant="ghost" size="sm" className="mb-2 -ml-2">
             <Link href="/service-sheets">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Fichas de Serviço
@@ -179,7 +185,7 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
         </nav>
 
         {/* Header Section */}
-        <div className="mb-8">
+        <div className="mb-6">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6 mb-6">
             <div className="space-y-4">
               <div className="flex items-center gap-3">
@@ -215,7 +221,8 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
                 className="hidden sm:flex"
               />
               
-              {serviceSheet.status !== "approved" && (
+              {/* Show edit/email actions only for admin (not technician or observer) */}
+              {serviceSheet.status !== "approved" && userProfile?.role === 'admin' && (
                 <>
                   <Button asChild size="default" className="hidden sm:flex">
                     <Link href={`/service-sheets/${serviceSheet.id}/edit`}>
@@ -253,7 +260,7 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
                         className="w-full justify-start"
                       />
                     </DropdownMenuItem>
-                    {serviceSheet.status !== "approved" && (
+                    {serviceSheet.status !== "approved" && userProfile?.role === 'admin' && (
                       <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
@@ -273,14 +280,15 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
                 </DropdownMenu>
               </div>
               
-              {/* Delete Button */}
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="default">
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    <span className="hidden sm:inline">Excluir</span>
-                  </Button>
-                </AlertDialogTrigger>
+              {/* Delete Button - Only for admins */}
+              {userProfile?.role === 'admin' && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="default">
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      <span className="hidden sm:inline">Excluir</span>
+                    </Button>
+                  </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
@@ -300,7 +308,8 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
-              </AlertDialog>
+                </AlertDialog>
+              )}
             </div>
           </div>
         </div>

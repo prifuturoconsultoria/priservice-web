@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getProjectById } from "@/lib/supabase";
 import ProjectForm from "@/components/project-form";
-import { getUser } from "@/lib/auth";
+import { getUser, getUserProfile } from "@/lib/auth";
 import { redirect } from 'next/navigation';
 
 interface EditProjectPageProps {
@@ -12,6 +12,11 @@ export default async function EditProjectPage({ params }: EditProjectPageProps) 
   const user = await getUser()
   if (!user) {
     redirect('/login')
+  }
+
+  const profile = await getUserProfile()
+  if (profile?.role === 'observer') {
+    redirect('/')
   }
 
   const project = await getProjectById(params.id);

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/utils/supabase/client"
 import { useToast } from "@/hooks/use-toast"
+import { getRoleTranslation } from "@/lib/role-translations"
 
 import {
   Sidebar,
@@ -141,7 +142,7 @@ export function AppSidebarClient({ user, profile, mainItems, secondaryItems }: A
                         {user?.user_metadata?.full_name || profile?.full_name || "Usuário"}
                       </span>
                       <span className="text-xs text-muted-foreground truncate">
-                        {profile?.role === 'admin' ? 'Administrador' : 'Técnico'}
+                        {getRoleTranslation(profile?.role)}
                       </span>
                     </div>
                     <ChevronUp className="ml-auto h-4 w-4" />

@@ -38,7 +38,7 @@ export async function getAllUsers() {
 }
 
 // Create new user (admin only) - direct approach
-export async function createUser(email: string, password: string, fullName: string, role: 'admin' | 'technician' = 'technician') {
+export async function createUser(email: string, password: string, fullName: string, role: 'admin' | 'technician' | 'observer' = 'technician') {
   await requireAdmin()
   
   try {
@@ -108,7 +108,7 @@ export async function createUser(email: string, password: string, fullName: stri
 }
 
 // Update user role (admin only)
-export async function updateUserRole(userId: string, role: 'admin' | 'technician') {
+export async function updateUserRole(userId: string, role: 'admin' | 'technician' | 'observer') {
   await requireAdmin()
   const supabase = await createClient()
 

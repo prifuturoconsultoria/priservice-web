@@ -6,7 +6,7 @@ import { getProjectById } from "@/lib/supabase";
 import { format } from "date-fns";
 import Link from "next/link";
 import { ArrowLeft, Edit, Building, User, Users } from "lucide-react";
-import { getUser } from "@/lib/auth";
+import { getUser, getUserProfile } from "@/lib/auth";
 import { redirect } from 'next/navigation';
 
 interface ProjectDetailPageProps {
@@ -17,6 +17,11 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
   const user = await getUser()
   if (!user) {
     redirect('/login')
+  }
+
+  const profile = await getUserProfile()
+  if (profile?.role === 'observer') {
+    redirect('/')
   }
 
   const project = await getProjectById(params.id);

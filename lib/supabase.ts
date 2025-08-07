@@ -58,7 +58,7 @@ export async function createServiceSheet(formData: any) {
         .insert({
           id: user.id,
           email: user.email!,
-          full_name: user.user_metadata?.full_name || formData.technician_name || user.email!,
+          full_name: user.user_metadata?.full_name || user.email!,
           role: user.email === 'nlanga@prifuturoconsultoria.com' ? 'admin' : 'technician'
         })
       console.log('Profile created successfully')
@@ -138,7 +138,7 @@ async function sendNotificationEmail(serviceSheet: any, approved: boolean, feedb
         // This is the current user, we can use their auth data
         console.log('Creator is current authenticated user, using auth data')
         creatorEmail = user.email
-        creatorName = user.user_metadata?.full_name || serviceSheet.technician_name || user.email
+        creatorName = user.user_metadata?.full_name || user.email
         
         // Create the missing profile with real data
         try {
@@ -166,7 +166,7 @@ async function sendNotificationEmail(serviceSheet: any, approved: boolean, feedb
         
         // For now, fallback to the hardcoded email until profiles are properly migrated
         creatorEmail = 'nlanga@prifuturoconsultoria.com'
-        creatorName = serviceSheet.technician_name || 'Técnico'
+        creatorName = 'Técnico'
         
         console.log('Using fallback email due to missing profile system')
       }
@@ -262,8 +262,10 @@ export async function getAllServiceSheets() {
       profiles!created_by(full_name, email)
     `)
 
-  // If not admin, filter by created_by to show only user's own service sheets
-  if (profile?.role !== 'admin') {
+  // Filter based on user role:
+  // - Admin and Observer can see all service sheets
+  // - Technician can only see their own service sheets
+  if (profile?.role === 'technician') {
     query = query.eq('created_by', user.id)
   }
   
@@ -407,8 +409,10 @@ export async function getAllProjects() {
 
   let query = supabase.from("projects").select("*")
 
-  // If not admin, filter by created_by to show only user's own projects
-  if (profile?.role !== 'admin') {
+  // Filter based on user role:
+  // - Admin and Observer can see all projects
+  // - Technician can only see their own projects  
+  if (profile?.role === 'technician') {
     query = query.eq('created_by', user.id)
   }
   
