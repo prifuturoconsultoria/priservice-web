@@ -1,6 +1,6 @@
 "use client"
 
-import { LogOut, ChevronUp, User2, Home, FileText, Users } from "lucide-react"
+import { LogOut, ChevronUp, User2, Home, FileText, Users, FolderOpen } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/utils/supabase/client"
@@ -26,6 +26,7 @@ const iconMap = {
   Home,
   FileText,
   Users,
+  FolderOpen,
 }
 
 interface AppSidebarClientProps {

@@ -1,5 +1,6 @@
 import { getServiceSheetByToken } from "@/lib/supabase"
 import { ApprovalButtons } from "@/components/approval-buttons"
+import { PDFGenerator } from "@/components/pdf-generator"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -16,7 +17,8 @@ import {
   FileText, 
   MessageSquare,
   Shield,
-  AlertTriangle
+  AlertTriangle,
+  Type
 } from "lucide-react"
 
 export default async function ApprovalPage({ params }: { params: Promise<{ token: string }> }) {
@@ -107,20 +109,40 @@ export default async function ApprovalPage({ params }: { params: Promise<{ token
               <div className="space-y-4">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <h2 className="text-lg md:text-2xl font-bold text-slate-800 flex-1">
-                    {serviceSheet.project_name}
+                    {serviceSheet.subject || serviceSheet.projects?.name || 'Serviço'}
                   </h2>
-                  <div className="flex items-center gap-2">
-                    {currentStatus.icon}
-                    <Badge 
+                  <div className="flex items-center gap-3">
+                    <PDFGenerator 
+                      serviceSheet={serviceSheet}
                       variant="outline" 
-                      className={cn("font-semibold text-xs md:text-sm px-2 md:px-3 py-1 border-2", currentStatus.color)}
-                    >
-                      {currentStatus.label}
-                    </Badge>
+                      size="sm"
+                    />
+                    <div className="flex items-center gap-2">
+                      {currentStatus.icon}
+                      <Badge 
+                        variant="outline" 
+                        className={cn("font-semibold text-xs md:text-sm px-2 md:px-3 py-1 border-2", currentStatus.color)}
+                      >
+                        {currentStatus.label}
+                      </Badge>
+                    </div>
                   </div>
                 </div>
                 
                 <Separator className="bg-slate-300" />
+                
+                {serviceSheet.subject && (
+                  <>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                        <Type className="h-3 w-3" />
+                        Assunto
+                      </div>
+                      <p className="text-sm md:text-base font-semibold text-slate-800">{serviceSheet.subject}</p>
+                    </div>
+                    <Separator className="bg-slate-300" />
+                  </>
+                )}
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -128,7 +150,7 @@ export default async function ApprovalPage({ params }: { params: Promise<{ token
                       <User className="h-3 w-3" />
                       Técnico Responsável
                     </div>
-                    <p className="text-sm md:text-base font-semibold text-slate-800">{serviceSheet.technician_name}</p>
+                    <p className="text-sm md:text-base font-semibold text-slate-800">{serviceSheet.profiles?.full_name || 'N/A'}</p>
                   </div>
                   
                   <div className="space-y-2">
@@ -136,7 +158,7 @@ export default async function ApprovalPage({ params }: { params: Promise<{ token
                       <Building2 className="h-3 w-3" />
                       Empresa Cliente
                     </div>
-                    <p className="text-sm md:text-base font-semibold text-slate-800">{serviceSheet.client_company}</p>
+                    <p className="text-sm md:text-base font-semibold text-slate-800">{serviceSheet.projects?.company || 'N/A'}</p>
                   </div>
                   
                   <div className="space-y-2">

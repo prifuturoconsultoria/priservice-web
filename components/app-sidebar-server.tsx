@@ -17,6 +17,11 @@ const mainItems = [
 
 const secondaryItems = [
   {
+    title: "Projetos",
+    url: "/projects",
+    icon: "FolderOpen",
+  },
+  {
     title: "Usuários",
     url: "/admin/users",
     icon: "Users",

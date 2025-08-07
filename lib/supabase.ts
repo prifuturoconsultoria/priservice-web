@@ -87,7 +87,15 @@ export async function createServiceSheet(formData: any) {
 
 export async function getServiceSheetByToken(token: string) {
   const supabase = await createServerSupabaseClient()
-  const { data, error } = await supabase.from("service_sheets").select("*").eq("approval_token", token).single()
+  const { data, error } = await supabase
+    .from("service_sheets")
+    .select(`
+      *,
+      projects!project_id(name, company, client_responsible, partner_responsible),
+      profiles!created_by(full_name, email)
+    `)
+    .eq("approval_token", token)
+    .single()
 
   if (error) {
     console.error("Error fetching service sheet by token:", error)
@@ -246,7 +254,13 @@ export async function getAllServiceSheets() {
     .eq('id', user.id)
     .single()
 
-  let query = supabase.from("service_sheets").select("*")
+  let query = supabase
+    .from("service_sheets")
+    .select(`
+      *,
+      projects!project_id(name, company, client_responsible, partner_responsible),
+      profiles!created_by(full_name, email)
+    `)
 
   // If not admin, filter by created_by to show only user's own service sheets
   if (profile?.role !== 'admin') {
@@ -259,12 +273,21 @@ export async function getAllServiceSheets() {
     console.error("Error fetching service sheets:", error)
     return []
   }
+  
   return data || []
 }
 
 export async function getServiceSheetById(id: string) {
   const supabase = await createServerSupabaseClient()
-  const { data, error } = await supabase.from("service_sheets").select("*").eq("id", id).single()
+  const { data, error } = await supabase
+    .from("service_sheets")
+    .select(`
+      *,
+      projects!project_id(name, company, client_responsible, partner_responsible),
+      profiles!created_by(full_name, email)
+    `)
+    .eq("id", id)
+    .single()
 
   if (error) {
     console.error("Error fetching service sheet by ID:", error)
@@ -324,6 +347,119 @@ export async function resendApprovalEmail(id: string) {
     console.error("Error resending approval email:", error)
     return { success: false, error: "Erro ao reenviar email" }
   }
+}
+
+// Get current user profile
+export async function getCurrentUserProfile() {
+  const supabase = await createServerSupabaseClient()
+  
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single()
+
+  return profile
+}
+
+// Project CRUD operations
+export async function createProject(formData: any) {
+  const supabase = await createServerSupabaseClient()
+  
+  // Get current user to set created_by
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { success: false, error: "User not authenticated" }
+  }
+
+  // Add created_by to form data
+  const dataWithCreator = {
+    ...formData,
+    created_by: user.id
+  }
+
+  const { data: project, error } = await supabase.from("projects").insert([dataWithCreator]).select().single()
+
+  if (error) {
+    console.error("Error creating project:", error)
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, data: project }
+}
+
+export async function getAllProjects() {
+  const supabase = await createServerSupabaseClient()
+  
+  // Get current user
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  // Get user profile to check role
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  let query = supabase.from("projects").select("*")
+
+  // If not admin, filter by created_by to show only user's own projects
+  if (profile?.role !== 'admin') {
+    query = query.eq('created_by', user.id)
+  }
+  
+  const { data, error } = await query.order("created_at", { ascending: false })
+
+  if (error) {
+    console.error("Error fetching projects:", error)
+    return []
+  }
+  return data || []
+}
+
+export async function getProjectById(id: string) {
+  const supabase = await createServerSupabaseClient()
+  const { data, error } = await supabase.from("projects").select("*").eq("id", id).single()
+
+  if (error) {
+    console.error("Error fetching project by ID:", error)
+    return null
+  }
+  return data
+}
+
+export async function updateProject(id: string, formData: any) {
+  const supabase = await createServerSupabaseClient()
+  const { data, error } = await supabase
+    .from("projects")
+    .update({
+      ...formData,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error("Error updating project:", error)
+    return { success: false, error: error.message }
+  }
+  return { success: true, data }
+}
+
+export async function deleteProject(id: string) {
+  const supabase = await createServerSupabaseClient()
+  const { error } = await supabase.from("projects").delete().eq("id", id)
+
+  if (error) {
+    console.error("Error deleting project:", error)
+    return { success: false, error: error.message }
+  }
+  return { success: true }
 }
 
 // Migration function to create profiles for existing users

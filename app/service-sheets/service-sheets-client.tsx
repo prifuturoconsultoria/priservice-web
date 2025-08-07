@@ -52,8 +52,10 @@ import {
   resendApprovalEmail,
 } from "@/lib/supabase";
 import { format } from "date-fns";
-import { MoreHorizontal, Eye, Edit, Trash2, Mail, Search, Filter, Calendar, X, Sparkles } from "lucide-react";
+import { MoreHorizontal, Eye, Edit, Trash2, Mail, Search, Filter, Calendar, X, Sparkles, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { PDFGenerator } from "@/components/pdf-generator";
+import { useRouter } from "next/navigation";
 
 interface ServiceSheetsClientProps {
   initialData: any[]
@@ -70,6 +72,7 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
   const [resendingId, setResendingId] = useState<string | null>(null);
   const itemsPerPage = 8;
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
     let filtered = serviceSheets;
@@ -77,11 +80,11 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
     if (searchTerm) {
       filtered = filtered.filter(
         (sheet) =>
-          sheet.project_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          sheet.technician_name
-            .toLowerCase()
+          sheet.projects?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          sheet.profiles?.full_name
+            ?.toLowerCase()
             .includes(searchTerm.toLowerCase()) ||
-          sheet.client_company.toLowerCase().includes(searchTerm.toLowerCase())
+          sheet.projects?.company?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -304,9 +307,6 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Fichas de Serviço</CardTitle>
-              <CardDescription>
-                {filteredSheets.length} de {serviceSheets.length} ficha{serviceSheets.length !== 1 ? "s" : ""} encontrada{serviceSheets.length !== 1 ? "s" : ""}
-              </CardDescription>
             </div>
             <div className="text-sm text-muted-foreground">
               Página {currentPage} de {Math.ceil(filteredSheets.length / itemsPerPage)}
@@ -336,10 +336,14 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
                   </TableHeader>
                   <TableBody>
                     {currentItems.map((sheet) => (
-                      <TableRow key={sheet.id}>
-                        <TableCell className="font-medium">{sheet.project_name}</TableCell>
-                        <TableCell>{sheet.technician_name}</TableCell>
-                        <TableCell>{sheet.client_company}</TableCell>
+                      <TableRow 
+                        key={sheet.id}
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => router.push(`/service-sheets/${sheet.id}`)}
+                      >
+                        <TableCell className="font-medium">{sheet.projects?.name || 'N/A'}</TableCell>
+                        <TableCell>{sheet.profiles?.full_name || 'N/A'}</TableCell>
+                        <TableCell>{sheet.projects?.company || 'N/A'}</TableCell>
                         <TableCell>{format(new Date(sheet.service_date), "dd/MM/yyyy")}</TableCell>
                         <TableCell>
                           <Badge variant={getStatusBadgeVariant(sheet.status)}>
@@ -349,7 +353,11 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
                         <TableCell className="text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" className="h-8 w-8 p-0">
+                              <Button 
+                                variant="ghost" 
+                                className="h-8 w-8 p-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <span className="sr-only">Abrir menu</span>
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
@@ -360,6 +368,16 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
                                   <Eye className="mr-2 h-4 w-4" />
                                   Ver Detalhes
                                 </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <div className="w-full">
+                                  <PDFGenerator 
+                                    serviceSheet={sheet}
+                                    variant="ghost" 
+                                    size="sm"
+                                    className="w-full justify-start p-0 h-auto"
+                                  />
+                                </div>
                               </DropdownMenuItem>
                               {sheet.status !== "approved" && (
                                 <>
@@ -393,7 +411,7 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Esta ação não pode ser desfeita. Isso excluirá permanentemente a ficha de serviço "{sheet.project_name}".
+                                      Esta ação não pode ser desfeita. Isso excluirá permanentemente a ficha de serviço "{sheet.projects?.name || 'N/A'}".
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>

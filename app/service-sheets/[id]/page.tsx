@@ -12,7 +12,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast"
 import { Separator } from "@/components/ui/separator"
 import Link from "next/link"
-import { Eye, Edit, Trash2, Mail, ArrowLeft, Clock, Calendar, User, Building2, Phone, CheckCircle, XCircle, AlertCircle, MessageSquare, MoreVertical } from "lucide-react"
+import { Eye, Edit, Trash2, Mail, ArrowLeft, Clock, Calendar, User, Building2, Phone, CheckCircle, XCircle, AlertCircle, MessageSquare, MoreVertical, Type } from "lucide-react"
+import { PDFGenerator } from "@/components/pdf-generator"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -196,16 +197,24 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
               
               <div>
                 <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground mb-2">
-                  {serviceSheet.project_name}
+                  {serviceSheet.subject || serviceSheet.projects?.name || 'N/A'}
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  Ficha de serviço técnico
+                  {serviceSheet.projects?.name || 'Projeto não especificado'} • Ficha de serviço técnico
                 </p>
               </div>
             </div>
             
             {/* Action Buttons */}
             <div className="flex items-center gap-3">
+              {/* PDF Download Button */}
+              <PDFGenerator 
+                serviceSheet={serviceSheet}
+                variant="outline" 
+                size="default" 
+                className="hidden sm:flex"
+              />
+              
               {serviceSheet.status !== "approved" && (
                 <>
                   <Button asChild size="default" className="hidden sm:flex">
@@ -236,8 +245,17 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild>
+                      <PDFGenerator 
+                        serviceSheet={serviceSheet}
+                        variant="outline" 
+                        size="sm"
+                        className="w-full justify-start"
+                      />
+                    </DropdownMenuItem>
                     {serviceSheet.status !== "approved" && (
                       <>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
                           <Link href={`/service-sheets/${serviceSheet.id}/edit`}>
                             <Edit className="mr-2 h-4 w-4" />
@@ -267,7 +285,7 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
                   <AlertDialogHeader>
                     <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Esta ação não pode ser desfeita. A ficha de serviço "{serviceSheet.project_name}" 
+                      Esta ação não pode ser desfeita. A ficha de serviço "{serviceSheet.projects?.name || 'N/A'}" 
                       será permanentemente removida do sistema.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
@@ -304,12 +322,22 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
               </CardHeader>
               <CardContent className="p-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {serviceSheet.subject && (
+                    <div className="space-y-2 md:col-span-2">
+                      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        <Type className="h-3 w-3" />
+                        Assunto
+                      </div>
+                      <p className="text-base md:text-lg font-semibold text-foreground">{serviceSheet.subject}</p>
+                    </div>
+                  )}
+                  
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
                       <User className="h-3 w-3" />
                       Técnico Responsável
                     </div>
-                    <p className="text-base md:text-lg font-semibold text-foreground">{serviceSheet.technician_name}</p>
+                    <p className="text-base md:text-lg font-semibold text-foreground">{serviceSheet.profiles?.full_name || 'N/A'}</p>
                   </div>
                   
                   <div className="space-y-2">
@@ -410,7 +438,7 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
                     Empresa
                   </div>
                   <p className="font-semibold text-sm md:text-base text-foreground break-words">
-                    {serviceSheet.client_company}
+                    {serviceSheet.projects?.company || 'N/A'}
                   </p>
                 </div>
                 

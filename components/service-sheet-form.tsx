@@ -2,24 +2,24 @@
 
 import type React from "react"
 
-import { useTransition, useEffect } from "react"
+import { useTransition, useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { createServiceSheet, updateServiceSheet } from "@/lib/supabase"
+import { createServiceSheet, updateServiceSheet, getAllProjects, getCurrentUserProfile } from "@/lib/supabase"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { RichTextEditor } from "@/components/ui/rich-text-editor"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { Send, Save } from "lucide-react"
 
 const formSchema = z.object({
-  project_name: z.string().min(1, "Nome do projeto é obrigatório").max(100, "Nome muito longo"),
-  technician_name: z.string().min(1, "Nome do técnico é obrigatório").max(100, "Nome muito longo"),
-  client_company: z.string().min(1, "Empresa cliente é obrigatória").max(100, "Nome muito longo"),
+  project_id: z.string().min(1, "Projeto é obrigatório"),
+  subject: z.string().min(1, "Assunto é obrigatório").max(200, "Assunto muito longo"),
   client_contact_name: z.string().min(1, "Nome do contato é obrigatório").max(100, "Nome muito longo"),
   client_contact_email: z.string().email("Email inválido"),
   client_contact_phone: z.string().optional(),
@@ -39,18 +39,28 @@ const formSchema = z.object({
 
 type FormData = z.infer<typeof formSchema>
 
+interface Project {
+  id: string
+  name: string
+  company: string
+  client_responsible: string
+  partner_responsible: string
+}
+
 interface ServiceSheetFormProps {
   initialData?: any
   isEditing?: boolean
 }
 
 export default function ServiceSheetForm({ initialData, isEditing = false }: ServiceSheetFormProps) {
+  const [projects, setProjects] = useState<Project[]>([])
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [isLoadingData, setIsLoadingData] = useState(true)
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      project_name: "",
-      technician_name: "",
-      client_company: "",
+      project_id: "",
+      subject: "",
       client_contact_name: "",
       client_contact_email: "",
       client_contact_phone: "",
@@ -62,25 +72,71 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
   })
 
   useEffect(() => {
-    if (initialData) {
-      form.reset({
-        project_name: initialData.project_name || "",
-        technician_name: initialData.technician_name || "",
-        client_company: initialData.client_company || "",
-        client_contact_name: initialData.client_contact_name || "",
-        client_contact_email: initialData.client_contact_email || "",
-        client_contact_phone: initialData.client_contact_phone || "",
-        service_date: initialData.service_date || "",
-        start_time: initialData.start_time || "",
-        end_time: initialData.end_time || "",
-        activity_description: initialData.activity_description || "",
-      })
+    const loadData = async () => {
+      try {
+        const [projectsData, userProfile] = await Promise.all([
+          getAllProjects(),
+          getCurrentUserProfile()
+        ])
+        
+        setProjects(projectsData)
+        setCurrentUser(userProfile)
+        
+        if (initialData) {
+          form.reset({
+            project_id: initialData.project_id || "",
+            subject: initialData.subject || "",
+            client_contact_name: initialData.client_contact_name || "",
+            client_contact_email: initialData.client_contact_email || "",
+            client_contact_phone: initialData.client_contact_phone || "",
+            service_date: initialData.service_date || "",
+            start_time: initialData.start_time || "",
+            end_time: initialData.end_time || "",
+            activity_description: initialData.activity_description || "",
+          })
+        } else {
+          // Set default values for new service sheet
+          form.reset({
+            project_id: "",
+            subject: "",
+            client_contact_name: "",
+            client_contact_email: "",
+            client_contact_phone: "",
+            service_date: "",
+            start_time: "",
+            end_time: "",
+            activity_description: "",
+          })
+        }
+      } catch (error) {
+        console.error('Error loading data:', error)
+      } finally {
+        setIsLoadingData(false)
+      }
     }
+    
+    loadData()
   }, [initialData, form])
   
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
   const { toast } = useToast()
+
+  if (isLoadingData) {
+    return (
+      <div className="w-full max-w-4xl mx-auto space-y-6">
+        <div className="text-center space-y-2">
+          <div className="h-8 bg-muted animate-pulse rounded"></div>
+          <div className="h-4 bg-muted animate-pulse rounded"></div>
+        </div>
+        <div className="space-y-4">
+          <div className="h-32 bg-muted animate-pulse rounded"></div>
+          <div className="h-32 bg-muted animate-pulse rounded"></div>
+          <div className="h-32 bg-muted animate-pulse rounded"></div>
+        </div>
+      </div>
+    )
+  }
 
   const onSubmit = async (data: FormData) => {
     startTransition(async () => {
@@ -131,37 +187,47 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
                 <div className="h-2 w-2 rounded-full bg-blue-500"></div>
                 Informações do Projeto
               </CardTitle>
-              <CardDescription>Dados básicos sobre o projeto e técnico responsável</CardDescription>
+              <CardDescription>Selecione o projeto para esta ficha de serviço</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="project_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Nome do Projeto *</FormLabel>
+              <FormField
+                control={form.control}
+                name="project_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Projeto *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <Input placeholder="Ex: Sistema de Gestão XYZ" {...field} />
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione um projeto" />
+                        </SelectTrigger>
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="technician_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Técnico Responsável *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Seu nome completo" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                      <SelectContent>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.name} - {project.company}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="subject"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">Assunto *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: Manutenção preventiva dos servidores" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </CardContent>
           </Card>
 
@@ -175,20 +241,7 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
               <CardDescription>Dados de contato e empresa do cliente</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="client_company"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Empresa *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Nome da empresa cliente" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <div className="grid grid-cols-1 gap-4">
                 <FormField
                   control={form.control}
                   name="client_contact_name"

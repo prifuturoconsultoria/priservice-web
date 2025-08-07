@@ -71,7 +71,7 @@ serve(async (req) => {
       const bgColor = approved ? '#f0fdf4' : '#fef2f2'
       const borderColor = approved ? '#22c55e' : '#ef4444'
       
-      subject = `${approved ? '✅' : '❌'} Sua ficha de serviço foi ${status} - ${serviceSheet.project_name}`
+      subject = `${approved ? '✅' : '❌'} Sua ficha de serviço foi ${status} - ${serviceSheet.subject || serviceSheet.projects?.name || 'Serviço'}`
       toEmail = recipientEmail
 
       htmlContent = `
@@ -95,8 +95,8 @@ serve(async (req) => {
               
               <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
                 <h3 style="margin-top: 0; color: #1f2937;">📋 Detalhes do Serviço</h3>
-                <p><strong>Projeto:</strong> ${serviceSheet.project_name}</p>
-                <p><strong>Cliente:</strong> ${serviceSheet.client_company}</p>
+                <p><strong>Projeto:</strong> ${serviceSheet.projects?.name || 'N/A'}</p>
+                <p><strong>Cliente:</strong> ${serviceSheet.projects?.company || 'N/A'}</p>
                 <p><strong>Contato:</strong> ${serviceSheet.client_contact_name}</p>
                 <p><strong>Data do Serviço:</strong> ${new Date(serviceSheet.service_date).toLocaleDateString('pt-BR')}</p>
                 <p><strong>Horário:</strong> ${serviceSheet.start_time} - ${serviceSheet.end_time}</p>
@@ -159,8 +159,8 @@ ${approved
 
 DETALHES DO SERVIÇO
 -------------------
-Projeto: ${serviceSheet.project_name}
-Cliente: ${serviceSheet.client_company}
+Projeto: ${serviceSheet.projects?.name || 'N/A'}
+Cliente: ${serviceSheet.projects?.company || 'N/A'}
 Contato: ${serviceSheet.client_contact_name}
 Data do Serviço: ${new Date(serviceSheet.service_date).toLocaleDateString('pt-BR')}
 Horário: ${serviceSheet.start_time} - ${serviceSheet.end_time}
@@ -189,7 +189,7 @@ Esta é uma notificação automática
     } else {
       console.log('>>> USING APPROVAL TEMPLATE <<<')
       // Original approval email
-      subject = `Aprovação de Ficha de Serviço - ${serviceSheet.project_name}`
+      subject = `Aprovação de Ficha de Serviço - ${serviceSheet.subject || serviceSheet.projects?.name || 'Serviço'}`
       toEmail = serviceSheet.client_contact_email
 
       htmlContent = `
@@ -209,12 +209,10 @@ Esta é uma notificação automática
               
               <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
                 <h3 style="margin-top: 0; color: #1f2937;">Detalhes do Serviço</h3>
-                <p><strong>Projeto:</strong> ${serviceSheet.project_name}</p>
-                <p><strong>Técnico:</strong> ${serviceSheet.technician_name}</p>
+                <p><strong>Assunto:</strong> ${serviceSheet.subject || serviceSheet.projects?.name || 'Serviço'}</p>
+                <p><strong>Técnico:</strong> ${serviceSheet.profiles?.full_name || 'N/A'}</p>
                 <p><strong>Data:</strong> ${new Date(serviceSheet.service_date).toLocaleDateString('pt-BR')}</p>
                 <p><strong>Horário:</strong> ${serviceSheet.start_time} - ${serviceSheet.end_time}</p>
-                <p><strong>Atividades Realizadas:</strong></p>
-                <div style="background-color: white; padding: 10px; border-radius: 4px;">${serviceSheet.activity_description}</div>
               </div>
               
               <div style="text-align: center; margin: 30px 0;">
@@ -242,13 +240,10 @@ Por favor, revise e aprove a ficha de serviço concluída:
 
 DETALHES DO SERVIÇO
 -------------------
-Projeto: ${serviceSheet.project_name}
-Técnico: ${serviceSheet.technician_name}
+Assunto: ${serviceSheet.subject || serviceSheet.projects?.name || 'Serviço'}
+Técnico: ${serviceSheet.profiles?.full_name || 'N/A'}
 Data: ${new Date(serviceSheet.service_date).toLocaleDateString('pt-BR')}
 Horário: ${serviceSheet.start_time} - ${serviceSheet.end_time}
-
-Atividades Realizadas:
-${serviceSheet.activity_description}
 
 Para aprovar ou rejeitar, acesse: ${approvalUrl}
 
