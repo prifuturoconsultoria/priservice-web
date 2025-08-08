@@ -14,8 +14,7 @@ const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "PriService",
-  description: "Sistema de fichas de serviço.",
-  generator: 'v0.dev',
+  description: "Sistema de Gestão de Fichas de Serviço",
   icons: {
     icon: '/icon.png',
     apple: '/apple-icon.png',

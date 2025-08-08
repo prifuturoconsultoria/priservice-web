@@ -2,25 +2,77 @@
 
 import { createClient } from "@/utils/supabase/server"
 import { requireAuth } from "./auth"
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+
+
+function createAdminClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+  
+  console.log('Environment check:', {
+    url: supabaseUrl,
+    hasServiceKey: !!supabaseServiceKey,
+    serviceKeyPrefix: supabaseServiceKey?.substring(0, 20) + '...', // Show first 20 chars
+    serviceKeyLength: supabaseServiceKey?.length
+  })
+  
+  return createSupabaseClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  })
+}
+
+// Test the admin client separately
+export async function testAdminClient() {
+  console.log('Testing admin client...')
+  const adminSupabase = createAdminClient()
+  
+  try {
+    // Test a simple admin operation
+    const { data, error } = await adminSupabase.auth.admin.listUsers()
+    console.log('Admin client test:', { users: data?.users?.length, error })
+    return { success: !error, error: error?.message }
+  } catch (err) {
+    console.error('Admin client test failed:', err)
+    return { success: false, error: 'Admin client failed' }
+  }
+}
+
 
 // Check if user is admin
 export async function requireAdmin() {
   const user = await requireAuth()
   const supabase = await createClient()
   
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
+  console.log('User from auth:', user) // Debug: Check if user exists
+  
+  try {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
 
-  if (!profile || profile.role !== 'admin') {
-    throw new Error('Access denied: Admin role required')
+    console.log('Profile query result:', { profile, error }) // Debug: See what's returned
+
+    if (error) {
+      console.error('Error checking admin role:', error)
+      throw new Error('not_admin')
+    }
+
+    if (!profile || profile.role !== 'admin') {
+      console.log('Profile check failed:', { profile, expectedRole: 'admin' }) // Debug
+      throw new Error('not_admin')
+    }
+
+    return user
+  } catch (error) {
+    console.error('Admin check failed:', error)
+    throw new Error('not_admin')
   }
-
-  return user
 }
-
 // Get all users (admin only)
 export async function getAllUsers() {
   await requireAdmin()
@@ -112,10 +164,11 @@ export async function updateUserRole(userId: string, role: 'admin' | 'technician
   await requireAdmin()
   const supabase = await createClient()
 
-  const { error } = await supabase
-    .from('profiles')
-    .update({ role, updated_at: new Date().toISOString() })
-    .eq('id', userId)
+  // Use RPC to bypass RLS for admin operations
+  const { error } = await supabase.rpc('update_user_role', {
+    target_user_id: userId,
+    new_role: role
+  })
 
   if (error) {
     console.error('Error updating user role:', error)
@@ -128,10 +181,11 @@ export async function updateUserRole(userId: string, role: 'admin' | 'technician
 // Delete user (admin only)
 export async function deleteUser(userId: string) {
   await requireAdmin()
-  const supabase = await createClient()
+  testAdminClient()
+  const adminSupabase = createAdminClient() // ✅ Use admin client instead of createClient()
 
   // Delete from auth.users (this will cascade to profiles)
-  const { error } = await supabase.auth.admin.deleteUser(userId)
+  const { error } = await adminSupabase.auth.admin.deleteUser(userId)
 
   if (error) {
     console.error('Error deleting user:', error)
@@ -144,9 +198,9 @@ export async function deleteUser(userId: string) {
 // Reset user password (admin only)
 export async function resetUserPassword(userId: string, newPassword: string) {
   await requireAdmin()
-  const supabase = await createClient()
+  const adminSupabase = createAdminClient() // ✅ Use admin client instead of createClient()
 
-  const { error } = await supabase.auth.admin.updateUserById(userId, {
+  const { error } = await adminSupabase.auth.admin.updateUserById(userId, {
     password: newPassword
   })
 
@@ -156,4 +210,22 @@ export async function resetUserPassword(userId: string, newPassword: string) {
   }
 
   return { success: true }
+}
+
+// Send magic link (admin only)
+export async function sendMagicLink(email: string) {
+  await requireAdmin()
+  const adminSupabase = createAdminClient()
+
+  const { error } = await adminSupabase.auth.admin.generateLink({
+    type: 'magiclink',
+    email: email
+  })
+
+  if (error) {
+    console.error('Error generating magic link:', error)
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, message: 'Link de confirmação enviado com sucesso!' }
 }

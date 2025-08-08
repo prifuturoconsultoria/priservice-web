@@ -400,23 +400,12 @@ export async function getAllProjects() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return []
 
-  // Get user profile to check role
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  let query = supabase.from("projects").select("*")
-
-  // Filter based on user role:
-  // - Admin and Observer can see all projects
-  // - Technician can only see their own projects  
-  if (profile?.role === 'technician') {
-    query = query.eq('created_by', user.id)
-  }
-  
-  const { data, error } = await query.order("created_at", { ascending: false })
+  // All users can see all projects for service sheet creation
+  // This allows technicians to select any project when creating service sheets
+  const { data, error } = await supabase
+    .from("projects")
+    .select("*")
+    .order("created_at", { ascending: false })
 
   if (error) {
     console.error("Error fetching projects:", error)
@@ -457,6 +446,27 @@ export async function updateProject(id: string, formData: any) {
 
 export async function deleteProject(id: string) {
   const supabase = await createServerSupabaseClient()
+  
+  // First check if project has any associated service sheets
+  const { data: serviceSheets, error: checkError } = await supabase
+    .from("service_sheets")
+    .select("id")
+    .eq("project_id", id)
+    .limit(1)
+  
+  if (checkError) {
+    console.error("Error checking project dependencies:", checkError)
+    return { success: false, error: "Erro ao verificar dependências do projeto" }
+  }
+  
+  if (serviceSheets && serviceSheets.length > 0) {
+    return { 
+      success: false, 
+      error: "Não é possível excluir este projeto pois existem fichas de serviço associadas. Exclua primeiro as fichas de serviço relacionadas." 
+    }
+  }
+  
+  // If no dependencies, proceed with deletion
   const { error } = await supabase.from("projects").delete().eq("id", id)
 
   if (error) {
@@ -464,6 +474,23 @@ export async function deleteProject(id: string) {
     return { success: false, error: error.message }
   }
   return { success: true }
+}
+
+// Get service sheets count for a project
+export async function getProjectServiceSheetsCount(projectId: string) {
+  const supabase = await createServerSupabaseClient()
+  
+  const { count, error } = await supabase
+    .from("service_sheets")
+    .select("*", { count: 'exact', head: true })
+    .eq("project_id", projectId)
+  
+  if (error) {
+    console.error("Error counting service sheets:", error)
+    return 0
+  }
+  
+  return count || 0
 }
 
 // Migration function to create profiles for existing users
