@@ -9,12 +9,6 @@ function createAdminClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
   
-  console.log('Environment check:', {
-    url: supabaseUrl,
-    hasServiceKey: !!supabaseServiceKey,
-    serviceKeyPrefix: supabaseServiceKey?.substring(0, 20) + '...', // Show first 20 chars
-    serviceKeyLength: supabaseServiceKey?.length
-  })
   
   return createSupabaseClient(supabaseUrl, supabaseServiceKey, {
     auth: {
@@ -26,16 +20,13 @@ function createAdminClient() {
 
 // Test the admin client separately
 export async function testAdminClient() {
-  console.log('Testing admin client...')
   const adminSupabase = createAdminClient()
   
   try {
     // Test a simple admin operation
     const { data, error } = await adminSupabase.auth.admin.listUsers()
-    console.log('Admin client test:', { users: data?.users?.length, error })
     return { success: !error, error: error?.message }
   } catch (err) {
-    console.error('Admin client test failed:', err)
     return { success: false, error: 'Admin client failed' }
   }
 }
@@ -46,7 +37,6 @@ export async function requireAdmin() {
   const user = await requireAuth()
   const supabase = await createClient()
   
-  console.log('User from auth:', user) // Debug: Check if user exists
   
   try {
     const { data: profile, error } = await supabase
@@ -55,21 +45,17 @@ export async function requireAdmin() {
       .eq('id', user.id)
       .single()
 
-    console.log('Profile query result:', { profile, error }) // Debug: See what's returned
 
     if (error) {
-      console.error('Error checking admin role:', error)
       throw new Error('not_admin')
     }
 
     if (!profile || profile.role !== 'admin') {
-      console.log('Profile check failed:', { profile, expectedRole: 'admin' }) // Debug
       throw new Error('not_admin')
     }
 
     return user
   } catch (error) {
-    console.error('Admin check failed:', error)
     throw new Error('not_admin')
   }
 }
@@ -82,7 +68,6 @@ export async function getAllUsers() {
   const { data: profiles, error } = await supabase.rpc('get_all_profiles')
 
   if (error) {
-    console.error('Error fetching users:', error)
     return []
   }
 
@@ -121,7 +106,6 @@ export async function createUser(email: string, password: string, fullName: stri
     })
 
     if (authError) {
-      console.error('Error creating user:', authError)
       return { success: false, error: authError.message }
     }
 
@@ -139,7 +123,6 @@ export async function createUser(email: string, password: string, fullName: stri
     })
 
     if (profileError) {
-      console.error('Error creating profile:', profileError)
       return { success: false, error: 'Usuário criado mas falha ao definir papel' }
     }
 
@@ -154,7 +137,6 @@ export async function createUser(email: string, password: string, fullName: stri
       }
     }
   } catch (error) {
-    console.error('Error creating user:', error)
     return { success: false, error: 'Falha ao criar usuário' }
   }
 }
@@ -171,7 +153,6 @@ export async function updateUserRole(userId: string, role: 'admin' | 'technician
   })
 
   if (error) {
-    console.error('Error updating user role:', error)
     return { success: false, error: error.message }
   }
 
@@ -188,7 +169,6 @@ export async function deleteUser(userId: string) {
   const { error } = await adminSupabase.auth.admin.deleteUser(userId)
 
   if (error) {
-    console.error('Error deleting user:', error)
     return { success: false, error: error.message }
   }
 
@@ -205,7 +185,6 @@ export async function resetUserPassword(userId: string, newPassword: string) {
   })
 
   if (error) {
-    console.error('Error resetting password:', error)
     return { success: false, error: error.message }
   }
 
@@ -217,13 +196,16 @@ export async function sendMagicLink(email: string) {
   await requireAdmin()
   const adminSupabase = createAdminClient()
 
-  const { error } = await adminSupabase.auth.admin.generateLink({
-    type: 'magiclink',
-    email: email
+  // Use signInWithOtp to send the actual magic link email
+  const { error } = await adminSupabase.auth.signInWithOtp({
+    email: email,
+    options: {
+      shouldCreateUser: false, // Don't create user if they don't exist
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/login`
+    }
   })
 
   if (error) {
-    console.error('Error generating magic link:', error)
     return { success: false, error: error.message }
   }
 
