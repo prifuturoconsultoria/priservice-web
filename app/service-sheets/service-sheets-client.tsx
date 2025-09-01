@@ -53,7 +53,8 @@ import {
   getCurrentUserProfile,
 } from "@/lib/supabase";
 import { format } from "date-fns";
-import { MoreHorizontal, Eye, Edit, Trash2, Mail, Search, Filter, Calendar, X, Sparkles, Download, Clock, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import { MoreHorizontal, Eye, Edit, Trash2, Mail, Search, Filter, Calendar, X, Sparkles, Download, Clock, ChevronUp, ChevronDown, ChevronsUpDown, FileDown } from "lucide-react";
+import { exportServiceSheetsToExcel } from "@/lib/excel-export";
 import { useToast } from "@/hooks/use-toast";
 import { PDFGenerator } from "@/components/pdf-generator";
 import { useRouter } from "next/navigation";
@@ -282,6 +283,22 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
     }
   };
 
+  const handleExportExcel = () => {
+    try {
+      exportServiceSheetsToExcel(filteredSheets);
+      toast({
+        title: "Sucesso!",
+        description: "Dados exportados para Excel com sucesso!",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Erro ao exportar dados para Excel",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <>
       {/* Filters Section */}
@@ -294,9 +311,20 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
                 Filtros e Busca
               </CardTitle>
             </div>
-            <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs">
-              {filteredSheets.length} resultado{filteredSheets.length !== 1 ? "s" : ""}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleExportExcel}
+                size="sm"
+                variant="outline"
+                className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100 h-7 text-xs"
+              >
+                <FileDown className="h-3 w-3 mr-1" />
+                Exportar Excel
+              </Button>
+              <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs">
+                {filteredSheets.length} resultado{filteredSheets.length !== 1 ? "s" : ""}
+              </Badge>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-0">
