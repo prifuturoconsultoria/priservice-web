@@ -200,6 +200,8 @@ export function ProjectsClient({ initialData }: ProjectsClientProps) {
                       <TableHead>Empresa</TableHead>
                       <TableHead>Resp. Cliente</TableHead>
                       <TableHead>Resp. Parceiro</TableHead>
+                      <TableHead className="text-center">Horas Totais</TableHead>
+                      <TableHead className="text-center">Horas Usadas</TableHead>
                       <TableHead>Criado em</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
@@ -211,6 +213,16 @@ export function ProjectsClient({ initialData }: ProjectsClientProps) {
                         <TableCell>{project.company}</TableCell>
                         <TableCell>{project.client_responsible}</TableCell>
                         <TableCell>{project.partner_responsible}</TableCell>
+                        <TableCell className="text-center">
+                          <span className="font-semibold text-green-600">
+                            {project.total_hours ? `${project.total_hours.toFixed(2)}h` : '0h'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="font-semibold text-red-600">
+                            {project.used_hours ? `${project.used_hours.toFixed(2)}h` : '0h'}
+                          </span>
+                        </TableCell>
                         <TableCell>{format(new Date(project.created_at), "dd/MM/yyyy")}</TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>

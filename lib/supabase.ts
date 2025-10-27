@@ -2,6 +2,68 @@
 
 import { createClient as createServerSupabaseClient } from "@/utils/supabase/server"
 
+// Helper function to calculate hours from start and end time
+function calculateHoursFromTime(startTime: string, endTime: string): number {
+  if (!startTime || !endTime) return 0
+
+  const [startHour, startMinute] = startTime.split(':').map(Number)
+  const [endHour, endMinute] = endTime.split(':').map(Number)
+
+  const startTotalMinutes = startHour * 60 + startMinute
+  const endTotalMinutes = endHour * 60 + endMinute
+
+  const diffMinutes = endTotalMinutes - startTotalMinutes
+  const hours = diffMinutes / 60
+
+  return Math.max(0, hours) // Ensure non-negative
+}
+
+// Helper function to check if project has sufficient hours
+async function checkProjectHours(projectId: string, hoursToAdd: number, excludeServiceSheetId?: string) {
+  const supabase = await createServerSupabaseClient()
+
+  // Get project with hours
+  const { data: project, error: projectError } = await supabase
+    .from("projects")
+    .select("total_hours, used_hours, name")
+    .eq("id", projectId)
+    .single()
+
+  if (projectError || !project) {
+    return { success: false, error: "Projeto não encontrado" }
+  }
+
+  // Calculate current used hours
+  let currentUsedHours = project.used_hours || 0
+
+  // If editing, subtract the old hours from current used hours to get accurate available hours
+  if (excludeServiceSheetId) {
+    const { data: oldServiceSheet } = await supabase
+      .from("service_sheets")
+      .select("start_time, end_time")
+      .eq("id", excludeServiceSheetId)
+      .single()
+
+    if (oldServiceSheet) {
+      const oldHours = calculateHoursFromTime(oldServiceSheet.start_time, oldServiceSheet.end_time)
+      currentUsedHours = Math.max(0, currentUsedHours - oldHours)
+    }
+  }
+
+  // Check if adding new hours would exceed total hours
+  const newUsedHours = currentUsedHours + hoursToAdd
+
+  if (newUsedHours > project.total_hours) {
+    const availableHours = project.total_hours - currentUsedHours
+    return {
+      success: false,
+      error: `Horas insuficientes no projeto "${project.name}". Disponível: ${availableHours.toFixed(2)}h, Solicitado: ${hoursToAdd.toFixed(2)}h`
+    }
+  }
+
+  return { success: true, availableHours: project.total_hours - currentUsedHours }
+}
+
 // Helper function to send approval email
 async function sendApprovalEmail(serviceSheet: any) {
   try {
@@ -32,11 +94,22 @@ async function sendApprovalEmail(serviceSheet: any) {
 
 export async function createServiceSheet(formData: any) {
   const supabase = await createServerSupabaseClient()
-  
+
   // Get current user to set created_by
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return { success: false, error: "User not authenticated" }
+  }
+
+  // Calculate hours from start_time and end_time
+  const calculatedHours = calculateHoursFromTime(formData.start_time, formData.end_time)
+
+  // Validate hours against project availability
+  if (calculatedHours > 0 && formData.project_id) {
+    const hoursCheck = await checkProjectHours(formData.project_id, calculatedHours)
+    if (!hoursCheck.success) {
+      return { success: false, error: hoursCheck.error }
+    }
   }
 
   // Ensure user has a profile (create if missing)
@@ -60,7 +133,7 @@ export async function createServiceSheet(formData: any) {
     }
   }
 
-  // Add created_by to form data
+  // Add created_by to form data (no hours_logged column in service_sheets)
   const dataWithCreator = {
     ...formData,
     created_by: user.id
@@ -70,6 +143,29 @@ export async function createServiceSheet(formData: any) {
 
   if (error) {
     return { success: false, error: error.message }
+  }
+
+  // Update project's used_hours
+  if (calculatedHours > 0 && formData.project_id) {
+    // Get current project hours
+    const { data: project } = await supabase
+      .from("projects")
+      .select("used_hours")
+      .eq("id", formData.project_id)
+      .single()
+
+    if (project) {
+      const newUsedHours = (project.used_hours || 0) + calculatedHours
+
+      const { error: projectError } = await supabase
+        .from("projects")
+        .update({ used_hours: newUsedHours })
+        .eq("id", formData.project_id)
+
+      if (projectError) {
+        console.error('Error updating project hours:', projectError)
+      }
+    }
   }
 
   await sendApprovalEmail(serviceSheet) // Call the placeholder email function
@@ -268,16 +364,78 @@ export async function getServiceSheetById(id: string) {
 
 export async function deleteServiceSheet(id: string) {
   const supabase = await createServerSupabaseClient()
+
+  // Get the service sheet to calculate hours before deleting
+  const { data: serviceSheet } = await supabase
+    .from("service_sheets")
+    .select("start_time, end_time, project_id")
+    .eq("id", id)
+    .single()
+
+  if (!serviceSheet) {
+    return { success: false, error: "Ficha de serviço não encontrada" }
+  }
+
+  // Calculate hours from the service sheet
+  const hours = calculateHoursFromTime(serviceSheet.start_time, serviceSheet.end_time)
+
+  // Delete the service sheet
   const { error } = await supabase.from("service_sheets").delete().eq("id", id)
 
   if (error) {
     return { success: false, error: error.message }
   }
+
+  // Update project's used_hours by subtracting the hours
+  if (hours > 0 && serviceSheet.project_id) {
+    const { data: project } = await supabase
+      .from("projects")
+      .select("used_hours")
+      .eq("id", serviceSheet.project_id)
+      .single()
+
+    if (project) {
+      const updatedUsedHours = Math.max(0, (project.used_hours || 0) - hours)
+      await supabase
+        .from("projects")
+        .update({ used_hours: updatedUsedHours })
+        .eq("id", serviceSheet.project_id)
+    }
+  }
+
   return { success: true }
 }
 
 export async function updateServiceSheet(id: string, formData: any) {
   const supabase = await createServerSupabaseClient()
+
+  // Get the old service sheet to compare hours
+  const { data: oldServiceSheet } = await supabase
+    .from("service_sheets")
+    .select("start_time, end_time, project_id")
+    .eq("id", id)
+    .single()
+
+  if (!oldServiceSheet) {
+    return { success: false, error: "Ficha de serviço não encontrada" }
+  }
+
+  // Calculate old and new hours
+  const oldHours = calculateHoursFromTime(oldServiceSheet.start_time, oldServiceSheet.end_time)
+  const newHours = calculateHoursFromTime(formData.start_time, formData.end_time)
+
+  const oldProjectId = oldServiceSheet.project_id
+  const newProjectId = formData.project_id
+
+  // Validate new hours against project availability
+  if (newHours > 0 && newProjectId) {
+    const hoursCheck = await checkProjectHours(newProjectId, newHours, id)
+    if (!hoursCheck.success) {
+      return { success: false, error: hoursCheck.error }
+    }
+  }
+
+  // Update the service sheet
   const { data, error } = await supabase
     .from("service_sheets")
     .update({
@@ -291,6 +449,63 @@ export async function updateServiceSheet(id: string, formData: any) {
   if (error) {
     return { success: false, error: error.message }
   }
+
+  // Update project hours if changed
+  if (oldProjectId === newProjectId) {
+    // Same project - just update the difference
+    const hoursDiff = newHours - oldHours
+    if (hoursDiff !== 0) {
+      const { data: project } = await supabase
+        .from("projects")
+        .select("used_hours")
+        .eq("id", newProjectId)
+        .single()
+
+      if (project) {
+        const updatedUsedHours = (project.used_hours || 0) + hoursDiff
+        await supabase
+          .from("projects")
+          .update({ used_hours: updatedUsedHours })
+          .eq("id", newProjectId)
+      }
+    }
+  } else {
+    // Different project - subtract from old, add to new
+    // Subtract from old project
+    if (oldHours > 0 && oldProjectId) {
+      const { data: oldProject } = await supabase
+        .from("projects")
+        .select("used_hours")
+        .eq("id", oldProjectId)
+        .single()
+
+      if (oldProject) {
+        const updatedOldUsedHours = Math.max(0, (oldProject.used_hours || 0) - oldHours)
+        await supabase
+          .from("projects")
+          .update({ used_hours: updatedOldUsedHours })
+          .eq("id", oldProjectId)
+      }
+    }
+
+    // Add to new project
+    if (newHours > 0 && newProjectId) {
+      const { data: newProject } = await supabase
+        .from("projects")
+        .select("used_hours")
+        .eq("id", newProjectId)
+        .single()
+
+      if (newProject) {
+        const updatedNewUsedHours = (newProject.used_hours || 0) + newHours
+        await supabase
+          .from("projects")
+          .update({ used_hours: updatedNewUsedHours })
+          .eq("id", newProjectId)
+      }
+    }
+  }
+
   return { success: true, data }
 }
 
@@ -437,17 +652,39 @@ export async function deleteProject(id: string) {
 // Get service sheets count for a project
 export async function getProjectServiceSheetsCount(projectId: string) {
   const supabase = await createServerSupabaseClient()
-  
+
   const { count, error } = await supabase
     .from("service_sheets")
     .select("*", { count: 'exact', head: true })
     .eq("project_id", projectId)
-  
+
   if (error) {
     return 0
   }
-  
+
   return count || 0
+}
+
+// Get project hours information
+export async function getProjectHoursInfo(projectId: string) {
+  const supabase = await createServerSupabaseClient()
+
+  const { data: project, error } = await supabase
+    .from("projects")
+    .select("total_hours, used_hours, name")
+    .eq("id", projectId)
+    .single()
+
+  if (error || !project) {
+    return null
+  }
+
+  return {
+    totalHours: project.total_hours || 0,
+    usedHours: project.used_hours || 0,
+    availableHours: (project.total_hours || 0) - (project.used_hours || 0),
+    projectName: project.name
+  }
 }
 
 // Migration function to create profiles for existing users

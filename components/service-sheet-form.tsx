@@ -6,7 +6,7 @@ import { useTransition, useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { createServiceSheet, updateServiceSheet, getAllProjects, getCurrentUserProfile } from "@/lib/supabase"
+import { createServiceSheet, updateServiceSheet, getAllProjects, getCurrentUserProfile, getProjectHoursInfo } from "@/lib/supabase"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { RichTextEditor } from "@/components/ui/rich-text-editor"
@@ -56,6 +56,7 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
   const [projects, setProjects] = useState<Project[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [isLoadingData, setIsLoadingData] = useState(true)
+  const [projectHoursInfo, setProjectHoursInfo] = useState<any>(null)
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -117,7 +118,21 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
     
     loadData()
   }, [initialData, form])
-  
+
+  // Watch for project selection changes and fetch hours info
+  const selectedProjectId = form.watch("project_id")
+  useEffect(() => {
+    const loadProjectHours = async () => {
+      if (selectedProjectId) {
+        const hoursInfo = await getProjectHoursInfo(selectedProjectId)
+        setProjectHoursInfo(hoursInfo)
+      } else {
+        setProjectHoursInfo(null)
+      }
+    }
+    loadProjectHours()
+  }, [selectedProjectId])
+
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
   const { toast } = useToast()
@@ -214,7 +229,27 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
                   </FormItem>
                 )}
               />
-              
+
+              {projectHoursInfo && (
+                <div className="p-4 rounded-lg bg-muted/50 border">
+                  <div className="flex items-center justify-between text-sm">
+                    <div>
+                      <span className="font-medium">Horas do Projeto:</span>
+                      <span className="ml-2 text-muted-foreground">
+                        {projectHoursInfo.usedHours.toFixed(2)}h / {projectHoursInfo.totalHours.toFixed(2)}h utilizadas
+                      </span>
+                    </div>
+                    <div className={`font-semibold ${projectHoursInfo.availableHours > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {projectHoursInfo.availableHours > 0 ? (
+                        <span>Disponível: {projectHoursInfo.availableHours.toFixed(2)}h</span>
+                      ) : (
+                        <span>Sem horas disponíveis</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <FormField
                 control={form.control}
                 name="subject"

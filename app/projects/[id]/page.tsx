@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { getProjectById } from "@/lib/supabase";
 import { format } from "date-fns";
 import Link from "next/link";
-import { ArrowLeft, Edit, Building, User, Users } from "lucide-react";
+import { ArrowLeft, Edit, Building, User, Users, Clock } from "lucide-react";
 import { getUser, getUserProfile } from "@/lib/auth";
 import { redirect } from 'next/navigation';
 
@@ -109,6 +109,66 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
               <p className="text-base font-semibold">{project.partner_responsible}</p>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Hours Tracking */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <div className="h-2 w-2 rounded-full bg-purple-500"></div>
+            Controle de Horas
+          </CardTitle>
+          <CardDescription>Horas alocadas e utilizadas no projeto</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                Horas Totais
+              </div>
+              <p className="text-2xl font-bold text-green-600">
+                {project.total_hours != null ? `${project.total_hours.toFixed(2)}h` : '0h'}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                Horas Usadas
+              </div>
+              <p className="text-2xl font-bold text-red-600">
+                {project.used_hours != null ? `${project.used_hours.toFixed(2)}h` : '0h'}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                Horas Disponíveis
+              </div>
+              <p className="text-2xl font-bold text-blue-600">
+                {project.total_hours != null && project.used_hours != null
+                  ? `${(project.total_hours - project.used_hours).toFixed(2)}h`
+                  : '0h'}
+              </p>
+            </div>
+          </div>
+          {project.total_hours != null && project.total_hours > 0 && (
+            <div className="mt-6">
+              <div className="flex items-center justify-between text-sm mb-2">
+                <span className="text-muted-foreground">Progresso</span>
+                <span className="font-medium">
+                  {project.total_hours > 0 ? ((project.used_hours || 0) / project.total_hours * 100).toFixed(1) : '0'}%
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-green-500 to-red-500 transition-all duration-300"
+                  style={{ width: `${project.total_hours > 0 ? Math.min(((project.used_hours || 0) / project.total_hours) * 100, 100) : 0}%` }}
+                />
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

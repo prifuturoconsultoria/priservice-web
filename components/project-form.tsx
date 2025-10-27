@@ -20,6 +20,7 @@ const formSchema = z.object({
   company: z.string().min(1, "Empresa é obrigatória").max(100, "Nome muito longo"),
   client_responsible: z.string().min(1, "Responsável cliente é obrigatório").max(100, "Nome muito longo"),
   partner_responsible: z.string().min(1, "Responsável parceiro é obrigatório").max(100, "Nome muito longo"),
+  total_hours: z.coerce.number().min(0, "Horas devem ser maior ou igual a 0").max(100000, "Valor muito alto"),
 })
 
 type FormData = z.infer<typeof formSchema>
@@ -37,6 +38,7 @@ export default function ProjectForm({ initialData, isEditing = false }: ProjectF
       company: "",
       client_responsible: "",
       partner_responsible: "",
+      total_hours: 0,
     },
   })
 
@@ -47,6 +49,7 @@ export default function ProjectForm({ initialData, isEditing = false }: ProjectF
         company: initialData.company || "",
         client_responsible: initialData.client_responsible || "",
         partner_responsible: initialData.partner_responsible || "",
+        total_hours: initialData.total_hours || 0,
       })
     }
   }, [initialData, form])
@@ -130,6 +133,22 @@ export default function ProjectForm({ initialData, isEditing = false }: ProjectF
                       <FormControl>
                         <Input placeholder="Nome da empresa" {...field} />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="total_hours"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium">Horas Totais *</FormLabel>
+                      <FormControl>
+                        <Input type="number" min="0" step="0.5" placeholder="Ex: 100" {...field} />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">Total de horas alocadas para este projeto</p>
                       <FormMessage />
                     </FormItem>
                   )}
