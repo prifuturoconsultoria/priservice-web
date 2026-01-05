@@ -35,19 +35,21 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({ success: true })
 
     // Set access token cookie (1 hour expiration)
+    // ✅ SECURITY: httpOnly + secure + strict sameSite
     response.cookies.set('access_token', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60, // 1 hour
+      httpOnly: true,      // Prevents JavaScript access (XSS protection)
+      secure: true,        // HTTPS only (always enabled for security)
+      sameSite: 'strict',  // Strict CSRF protection
+      maxAge: 60 * 60,     // 1 hour
       path: '/',
     })
 
     // Set refresh token cookie (7 days expiration)
+    // ✅ SECURITY: httpOnly + secure + strict sameSite
     response.cookies.set('refresh_token', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      httpOnly: true,      // Prevents JavaScript access (XSS protection)
+      secure: true,        // HTTPS only (always enabled for security)
+      sameSite: 'strict',  // Strict CSRF protection
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: '/',
     })

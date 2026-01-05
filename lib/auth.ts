@@ -9,6 +9,7 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { createClient } from '@/utils/supabase/server'
+import { jwtVerify } from 'jose'
 
 export type UserRole = 'admin' | 'technician' | 'observer'
 
@@ -20,16 +21,76 @@ export interface User {
 }
 
 /**
- * Decode JWT token and extract user info
+ * Verify JWT signature and extract user info
+ * ✅ SECURITY: Verifies token signature to prevent forgery
+ * @param token JWT access token
+ * @returns Verified user data or null if invalid
+ */
+async function verifyJWT(token: string): Promise<User | null> {
+  try {
+    // First, decode header to check algorithm
+    const parts = token.split('.')
+    if (parts.length !== 3) {
+      console.error('[verifyJWT] Invalid JWT format')
+      return null
+    }
+
+    const header = JSON.parse(
+      Buffer.from(parts[0].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()
+    )
+
+    console.log('[verifyJWT] JWT algorithm:', header.alg)
+
+    // Get JWT secret from environment
+    const secret = process.env.JWT_SECRET
+
+    if (!secret) {
+      console.error('[verifyJWT] JWT_SECRET not configured - using insecure decode fallback')
+      // Fallback to unsafe decode (development only)
+      return decodeJWTUnsafe(token)
+    }
+
+    // Create secret key for verification
+    const secretKey = new TextEncoder().encode(secret)
+
+    // ✅ Verify signature and decode (prevents token forgery)
+    // Allow common HMAC algorithms (HS256, HS384, HS512)
+    const { payload } = await jwtVerify(token, secretKey, {
+      algorithms: ['HS256', 'HS384', 'HS512'],
+    })
+
+    console.log('[verifyJWT] Token verified successfully:', payload.sub)
+
+    // Extract user info from JWT claims
+    // Backend JWT structure: { role, userId, sub (email), iat, exp }
+    const user: User = {
+      id: 0, // Backend uses UUID in userId field, frontend expects number (not used)
+      email: (payload.sub as string) || '', // sub contains the email
+      fullName: (payload.fullName as string) || (payload.name as string) || (payload.sub as string)?.split('@')[0] || 'User',
+      role: ((payload.role as string)?.toLowerCase() || 'observer') as UserRole, // Convert TECHNICIAN -> technician
+    }
+
+    return user
+  } catch (error) {
+    console.error('[verifyJWT] Token verification failed:', error)
+    return null
+  }
+}
+
+/**
+ * Decode JWT without signature verification (INSECURE - fallback only)
+ * ⚠️ WARNING: Use only when JWT_SECRET is not configured
  * @param token JWT access token
  * @returns Decoded user data or null if invalid
  */
-function decodeJWT(token: string): User | null {
+function decodeJWTUnsafe(token: string): User | null {
   try {
+    console.warn('[decodeJWTUnsafe] ⚠️ WARNING: Using insecure JWT decode without signature verification!')
+
     // JWT format: header.payload.signature
     const parts = token.split('.')
     if (parts.length !== 3) {
-      console.error('[decodeJWT] Invalid JWT format')
+      console.error('[decodeJWTUnsafe] Invalid JWT format')
       return null
     }
 
@@ -38,26 +99,23 @@ function decodeJWT(token: string): User | null {
       Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()
     )
 
-    console.log('[decodeJWT] Token payload:', payload)
-
     // Check expiration
     if (payload.exp && payload.exp * 1000 < Date.now()) {
-      console.error('[decodeJWT] Token expired')
+      console.error('[decodeJWTUnsafe] Token expired')
       return null
     }
 
     // Extract user info from JWT claims
-    // Backend JWT structure: { role, userId, sub (email), iat, exp }
     const user: User = {
-      id: 0, // Backend uses UUID in userId field, frontend expects number (not used)
-      email: payload.sub || '', // sub contains the email
+      id: 0,
+      email: payload.sub || '',
       fullName: payload.fullName || payload.name || payload.sub?.split('@')[0] || 'User',
-      role: (payload.role?.toLowerCase() || 'observer') as UserRole, // Convert TECHNICIAN -> technician
+      role: (payload.role?.toLowerCase() || 'observer') as UserRole,
     }
 
     return user
   } catch (error) {
-    console.error('[decodeJWT] Error decoding token:', error)
+    console.error('[decodeJWTUnsafe] Error decoding token:', error)
     return null
   }
 }
@@ -78,15 +136,15 @@ export async function getUser(): Promise<User | null> {
       return null
     }
 
-    // Decode JWT to get user info (no backend call needed)
-    const user = decodeJWT(accessToken)
+    // ✅ SECURITY: Verify JWT signature and decode
+    const user = await verifyJWT(accessToken)
 
     if (!user) {
-      console.error('[getUser] Failed to decode JWT or token expired')
+      console.error('[getUser] Failed to verify JWT or token expired')
       return null
     }
 
-    console.log('[getUser] User decoded from JWT:', user.email)
+    console.log('[getUser] User verified from JWT:', user.email)
     return user
   } catch (error) {
     console.error('[getUser] Error getting user:', error)

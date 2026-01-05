@@ -28,7 +28,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const USER_KEY = 'auth_user'
-const TOKEN_KEY = 'auth_tokens'
+// TOKEN_KEY removed - tokens now stored in HTTP-only cookies only
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -67,12 +67,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await response.json()
       console.log('[Auth] Backend auth successful:', data.user?.email)
 
-      // Store user and tokens
+      // ✅ SECURITY: Store ONLY user data, NOT tokens
+      // Tokens are stored in HTTP-only cookies only (XSS protection)
       sessionStorage.setItem(USER_KEY, JSON.stringify(data.user))
-      sessionStorage.setItem(TOKEN_KEY, JSON.stringify({
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-      }))
 
       setUser(data.user)
 
@@ -101,14 +98,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    console.log('[Auth] Logging out...')
+
+    // Clear session storage
     sessionStorage.removeItem(USER_KEY)
-    sessionStorage.removeItem(TOKEN_KEY)
     setUser(null)
 
-    fetch('/api/sync-tokens', { method: 'DELETE' }).catch(console.error)
-    router.push('/login')
-  }, [router])
+    // Clear HTTP-only cookies
+    try {
+      await fetch('/api/sync-tokens', { method: 'DELETE' })
+      console.log('[Auth] Cookies cleared successfully')
+    } catch (error) {
+      console.error('[Auth] Error clearing cookies:', error)
+    }
+
+    // Use full page reload to ensure cookies are completely cleared
+    console.log('[Auth] Redirecting to login page')
+    window.location.href = '/login'
+  }, [])
 
   const refreshUser = useCallback(async () => {
     const storedUser = sessionStorage.getItem(USER_KEY)
