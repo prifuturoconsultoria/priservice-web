@@ -202,7 +202,6 @@ export function ProjectsClient({ initialData }: ProjectsClientProps) {
                       <TableHead>Resp. Parceiro</TableHead>
                       <TableHead className="text-center">Horas Totais</TableHead>
                       <TableHead className="text-center">Horas Usadas</TableHead>
-                      <TableHead>Criado em</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
