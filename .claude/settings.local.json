@@ -16,7 +16,11 @@
       "Bash(npm run dev:*)",
       "Bash(cp:*)",
       "Bash(copy:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(npm view:*)",
+      "Bash(node -e:*)",
+      "Bash(dir /s \"D:\\\\Mosprey Innovations\\\\Projects 2.0\\\\service-sheet-system\\\\app\" /b)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }

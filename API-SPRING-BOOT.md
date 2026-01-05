@@ -1464,7 +1464,336 @@ Autentica usuário via magic link (público).
 
 ---
 
-## 7. REGRAS DE AUTORIZAÇÃO (RBAC)
+## 7. STATISTICS & DASHBOARD
+
+### 7.1 GET /api/statistics/dashboard
+Retorna estatísticas gerais para exibição no dashboard.
+
+**Headers:**
+```
+Authorization: Bearer {accessToken}
+```
+
+**Response (200 OK):**
+```json
+{
+  "summary": {
+    "totalSheets": 150,
+    "pendingSheets": 25,
+    "approvedSheets": 110,
+    "rejectedSheets": 15,
+    "approvalRate": 73.33,
+    "pendingRate": 16.67,
+    "rejectionRate": 10.0
+  },
+  "activityLast7Days": [
+    {
+      "date": "2024-01-05",
+      "count": 5,
+      "dayOfWeek": "Sexta"
+    },
+    {
+      "date": "2024-01-04",
+      "count": 3,
+      "dayOfWeek": "Quinta"
+    },
+    {
+      "date": "2024-01-03",
+      "count": 8,
+      "dayOfWeek": "Quarta"
+    },
+    {
+      "date": "2024-01-02",
+      "count": 2,
+      "dayOfWeek": "Terça"
+    },
+    {
+      "date": "2024-01-01",
+      "count": 4,
+      "dayOfWeek": "Segunda"
+    },
+    {
+      "date": "2023-12-31",
+      "count": 1,
+      "dayOfWeek": "Domingo"
+    },
+    {
+      "date": "2023-12-30",
+      "count": 6,
+      "dayOfWeek": "Sábado"
+    }
+  ],
+  "monthlyTrend": [
+    {
+      "month": "2024-01",
+      "monthName": "Janeiro",
+      "count": 45
+    },
+    {
+      "month": "2023-12",
+      "monthName": "Dezembro",
+      "count": 38
+    },
+    {
+      "month": "2023-11",
+      "monthName": "Novembro",
+      "count": 42
+    },
+    {
+      "month": "2023-10",
+      "monthName": "Outubro",
+      "count": 35
+    },
+    {
+      "month": "2023-09",
+      "monthName": "Setembro",
+      "count": 28
+    },
+    {
+      "month": "2023-08",
+      "monthName": "Agosto",
+      "count": 31
+    }
+  ],
+  "recentSheets": [
+    {
+      "id": "uuid",
+      "projectName": "Projeto ABC",
+      "company": "Cliente XYZ LTDA",
+      "status": "approved",
+      "serviceDate": "2024-01-05",
+      "totalHours": 8.0,
+      "createdBy": {
+        "id": "uuid",
+        "fullName": "João Técnico",
+        "email": "joao@example.com"
+      },
+      "createdAt": "2024-01-05T10:00:00Z"
+    },
+    {
+      "id": "uuid",
+      "projectName": "Projeto DEF",
+      "company": "Empresa Cliente LTDA",
+      "status": "pending",
+      "serviceDate": "2024-01-04",
+      "totalHours": 6.5,
+      "createdBy": {
+        "id": "uuid",
+        "fullName": "Maria Silva",
+        "email": "maria@example.com"
+      },
+      "createdAt": "2024-01-04T14:30:00Z"
+    }
+    // ... até 5 fichas mais recentes
+  ]
+}
+```
+
+**Regras de Negócio:**
+
+1. **Filtro por Role (IMPORTANTE):**
+   - **Technician:** Retornar estatísticas **apenas** dos service sheets criados por ele (`created_by = userId`)
+   - **Admin:** Retornar estatísticas de **todos** os service sheets
+   - **Observer:** Retornar estatísticas de **todos** os service sheets
+
+2. **Cálculo de Percentuais:**
+   ```java
+   approvalRate = (approvedSheets / totalSheets) * 100
+   pendingRate = (pendingSheets / totalSheets) * 100
+   rejectionRate = (rejectedSheets / totalSheets) * 100
+   ```
+   - Arredondar para 2 casas decimais
+   - Se `totalSheets = 0`, retornar `0.0` para todos os percentuais
+
+3. **Activity Last 7 Days:**
+   - Contar service sheets criados nos últimos 7 dias (incluindo hoje)
+   - Agrupar por data (`created_at`)
+   - Ordenar do mais recente para o mais antigo
+   - Incluir dias com count = 0
+
+4. **Monthly Trend:**
+   - Contar service sheets dos últimos 6 meses completos
+   - Agrupar por mês/ano
+   - Ordenar do mais recente para o mais antigo
+   - Formato: `YYYY-MM` (ex: "2024-01")
+
+5. **Recent Sheets:**
+   - Retornar as 5 fichas mais recentes
+   - Ordenar por `created_at DESC`
+   - Incluir dados do projeto (JOIN)
+   - Incluir dados do criador (JOIN)
+   - Calcular `totalHours` somando todas as linhas
+
+**Exemplo de Implementação:**
+```java
+@GetMapping("/statistics/dashboard")
+public ResponseEntity<DashboardStatisticsDto> getDashboardStatistics(
+  Authentication authentication
+) {
+  Profile currentUser = getCurrentUserProfile(authentication);
+
+  // Determinar filtro por role
+  List<ServiceSheet> sheets;
+  if (currentUser.getRole() == Role.TECHNICIAN) {
+    sheets = serviceSheetRepository.findByCreatedBy(currentUser);
+  } else {
+    sheets = serviceSheetRepository.findAll();
+  }
+
+  // Calcular summary
+  long total = sheets.size();
+  long pending = sheets.stream().filter(s -> s.getStatus() == Status.PENDING).count();
+  long approved = sheets.stream().filter(s -> s.getStatus() == Status.APPROVED).count();
+  long rejected = sheets.stream().filter(s -> s.getStatus() == Status.REJECTED).count();
+
+  double approvalRate = total > 0 ? (approved * 100.0 / total) : 0.0;
+  double pendingRate = total > 0 ? (pending * 100.0 / total) : 0.0;
+  double rejectionRate = total > 0 ? (rejected * 100.0 / total) : 0.0;
+
+  // Calcular activityLast7Days
+  LocalDate today = LocalDate.now();
+  List<ActivityDto> activity = new ArrayList<>();
+  for (int i = 0; i < 7; i++) {
+    LocalDate date = today.minusDays(i);
+    long count = sheets.stream()
+      .filter(s -> s.getCreatedAt().toLocalDate().equals(date))
+      .count();
+    activity.add(new ActivityDto(date, count));
+  }
+
+  // Calcular monthlyTrend
+  YearMonth currentMonth = YearMonth.now();
+  List<MonthlyTrendDto> trend = new ArrayList<>();
+  for (int i = 0; i < 6; i++) {
+    YearMonth month = currentMonth.minusMonths(i);
+    long count = sheets.stream()
+      .filter(s -> {
+        YearMonth sheetMonth = YearMonth.from(s.getCreatedAt());
+        return sheetMonth.equals(month);
+      })
+      .count();
+    trend.add(new MonthlyTrendDto(month, count));
+  }
+
+  // Buscar recent sheets
+  List<ServiceSheet> recent = sheets.stream()
+    .sorted(Comparator.comparing(ServiceSheet::getCreatedAt).reversed())
+    .limit(5)
+    .collect(Collectors.toList());
+
+  return ResponseEntity.ok(
+    new DashboardStatisticsDto(summary, activity, trend, recent)
+  );
+}
+```
+
+**Performance:**
+- Considere usar queries SQL otimizadas ao invés de filtrar em memória
+- Use índices em `created_at` e `status`
+- Cache os resultados por 5-10 minutos se necessário
+
+**Errors:**
+- `401` - Não autenticado
+
+---
+
+### 7.2 GET /api/statistics/projects
+Retorna estatísticas agregadas de projetos.
+
+**Headers:**
+```
+Authorization: Bearer {accessToken}
+```
+
+**Response (200 OK):**
+```json
+{
+  "totalProjects": 25,
+  "totalHoursAllocated": 4500.0,
+  "totalHoursUsed": 2850.5,
+  "totalHoursAvailable": 1649.5,
+  "utilizationRate": 63.34,
+  "projectsWithLowHours": [
+    {
+      "id": "uuid",
+      "name": "Projeto ABC",
+      "company": "Cliente XYZ",
+      "totalHours": 160.0,
+      "usedHours": 155.0,
+      "availableHours": 5.0,
+      "utilizationRate": 96.88
+    }
+    // Projetos com menos de 10% disponível
+  ]
+}
+```
+
+**Regras:**
+- Todos os usuários veem todas as estatísticas de projetos
+- `utilizationRate = (totalHoursUsed / totalHoursAllocated) * 100`
+- `projectsWithLowHours`: Projetos onde `availableHours < (totalHours * 0.1)`
+
+**Errors:**
+- `401` - Não autenticado
+
+---
+
+### 7.3 GET /api/statistics/technicians
+Retorna estatísticas por técnico (apenas admin).
+
+**Headers:**
+```
+Authorization: Bearer {accessToken}
+```
+
+**Response (200 OK):**
+```json
+{
+  "technicians": [
+    {
+      "id": "uuid",
+      "fullName": "João Técnico",
+      "email": "joao@example.com",
+      "totalSheets": 45,
+      "pendingSheets": 5,
+      "approvedSheets": 38,
+      "rejectedSheets": 2,
+      "approvalRate": 84.44,
+      "totalHoursWorked": 360.0
+    },
+    {
+      "id": "uuid",
+      "fullName": "Maria Silva",
+      "email": "maria@example.com",
+      "totalSheets": 38,
+      "pendingSheets": 3,
+      "approvedSheets": 33,
+      "rejectedSheets": 2,
+      "approvalRate": 86.84,
+      "totalHoursWorked": 304.0
+    }
+  ],
+  "topPerformers": [
+    // Top 3 técnicos por approval rate
+  ],
+  "mostActive": [
+    // Top 3 técnicos por número de fichas
+  ]
+}
+```
+
+**Regras:**
+- **APENAS ADMIN** pode acessar este endpoint
+- `totalHoursWorked`: Soma de todas as horas das fichas do técnico
+- Ordenar por `approvalRate DESC`
+
+**Errors:**
+- `403` - Usuário não é admin
+- `401` - Não autenticado
+
+---
+
+## 8. REGRAS DE AUTORIZAÇÃO (RBAC)
 
 ### Roles e Permissões
 

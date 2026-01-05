@@ -1,105 +1,109 @@
-"use client"
+'use client'
 
-import { useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import * as z from "zod"
-import { signIn, signUp } from "@/lib/auth"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-// Removed Tabs - no more public signup
-import { useToast } from "@/hooks/use-toast"
+/**
+ * Login Page with Microsoft Azure AD Authentication
+ *
+ * Redirects users to Microsoft OAuth for authentication
+ */
 
-const loginSchema = z.object({
-  email: z.string().email("Email inválido"),
-  password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
-})
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { getAzureLoginUrl } from '@/lib/azure-auth'
+import { useAuth } from '@/contexts/auth-context'
+import { Loader2 } from 'lucide-react'
 
-type LoginData = z.infer<typeof loginSchema>
+// Simple Microsoft logo SVG icon
+function MicrosoftIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 23 23"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M0 0h11v11H0z" fill="#F25022" />
+      <path d="M12 0h11v11H12z" fill="#7FBA00" />
+      <path d="M0 12h11v11H0z" fill="#00A4EF" />
+      <path d="M12 12h11v11H12z" fill="#FFB900" />
+    </svg>
+  )
+}
 
 export default function LoginPage() {
-  const [isPending, startTransition] = useTransition()
+  const { isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
-  const { toast } = useToast()
+  const [isRedirecting, setIsRedirecting] = useState(false)
 
-  const loginForm = useForm<LoginData>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
-  })
+  // Note: Redirect is handled by middleware, no need for client-side redirect
+  // This prevents double-redirect issues
 
-
-  const onLogin = async (data: LoginData) => {
-    startTransition(async () => {
-      const result = await signIn(data.email, data.password)
-      if (result.success) {
-        toast({
-          title: "Sucesso!",
-          description: "Login realizado com sucesso!",
-        })
-        router.push("/")
-      } else {
-        toast({
-          title: "Erro",
-          description: result.error || "Erro ao fazer login",
-          variant: "destructive",
-        })
-      }
-    })
+  const handleLogin = () => {
+    try {
+      setIsRedirecting(true)
+      const loginUrl = getAzureLoginUrl()
+      window.location.href = loginUrl
+    } catch (error) {
+      console.error('Error generating login URL:', error)
+      alert('Erro ao iniciar login.')
+      setIsRedirecting(false)
+    }
   }
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
-      <Card className="w-full max-w-md shadow-xl">
-        <CardHeader className="text-center space-y-4">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary text-primary-foreground">
-            <span className="text-2xl font-bold">PS</span>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-4">
+      <Card className="w-full max-w-md shadow-2xl border-0 overflow-hidden">
+        <div className="h-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600"></div>
+        <CardHeader className="space-y-6 text-center pt-8 pb-6">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg">
+            <span className="text-3xl font-bold">PS</span>
           </div>
-          <CardTitle className="text-3xl font-bold text-gray-900">PriService</CardTitle>
-          <CardDescription className="text-gray-600">
-            Faça login para acessar o sistema de fichas de serviço
-          </CardDescription>
+          <div className="space-y-2">
+            <CardTitle className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+              PriService
+            </CardTitle>
+            <CardDescription className="text-base">
+              Sistema de Gestão de Fichas de Serviço
+            </CardDescription>
+          </div>
         </CardHeader>
-        <CardContent>
-          <Form {...loginForm}>
-            <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
-              <FormField
-                control={loginForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="seu@email.com" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={loginForm.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Senha</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="Sua senha" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button type="submit" className="w-full" disabled={isPending}>
-                {isPending ? "Entrando..." : "Entrar"}
-              </Button>
-            </form>
-          </Form>
+        <CardContent className="space-y-6 px-8 pb-8">
+          <Button
+            onClick={handleLogin}
+            className="w-full h-12 text-base font-medium bg-white text-gray-900 border border-gray-300 hover:bg-gray-50 hover:shadow-md transition-all"
+            size="lg"
+            disabled={isRedirecting}
+            variant="outline"
+          >
+            {isRedirecting ? (
+              <>
+                <Loader2 className="mr-3 h-5 w-5 animate-spin" />
+                Redirecionando...
+              </>
+            ) : (
+              <>
+                <MicrosoftIcon className="mr-3 h-5 w-5" />
+                Entrar com Microsoft
+              </>
+            )}
+          </Button>
+          <div className="text-center space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Acesso seguro via Microsoft 365
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Use suas credenciais corporativas
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>

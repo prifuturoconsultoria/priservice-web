@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient as createServerSupabaseClient } from "@/utils/supabase/server"
+import { getUser, getUserProfile } from "@/lib/auth"
 
 // Helper function to calculate hours from start and end time
 function calculateHoursFromTime(startTime: string, endTime: string): number {
@@ -95,10 +96,15 @@ async function sendApprovalEmail(serviceSheet: any) {
 export async function createServiceSheet(formData: any) {
   const supabase = await createServerSupabaseClient()
 
-  // Get current user to set created_by
-  const { data: { user } } = await supabase.auth.getUser()
+  // Get current user and profile
+  const user = await getUser()
   if (!user) {
     return { success: false, error: "User not authenticated" }
+  }
+
+  const profile = await getUserProfile()
+  if (!profile) {
+    return { success: false, error: "User profile not found" }
   }
 
   // Calculate hours from start_time and end_time
@@ -112,12 +118,8 @@ export async function createServiceSheet(formData: any) {
     }
   }
 
-  // Ensure user has a profile (create if missing)
-  const { data: existingProfile } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('id', user.id)
-    .single()
+  // Profile already exists from getUserProfile()
+  const existingProfile = profile
 
   if (!existingProfile) {
     try {
@@ -214,36 +216,16 @@ async function sendNotificationEmail(serviceSheet: any, approved: boolean, feedb
     } else {
       
       // Try to get the user's email from auth.users by getting current user context
-      const { data: { user } } = await supabase.auth.getUser()
+      const currentProfile = await getUserProfile()
       
-      if (user && user.id === serviceSheet.created_by) {
-        // This is the current user, we can use their auth data
-        creatorEmail = user.email
-        creatorName = user.user_metadata?.full_name || user.email
-        
-        // Create the missing profile with real data
-        try {
-          const { error: insertError } = await supabase
-            .from('profiles')
-            .insert({
-              id: user.id,
-              email: user.email,
-              full_name: creatorName,
-              role: 'technician'
-            })
-          
-          if (insertError) {
-          } else {
-          }
-        } catch (profileCreateError) {
-        }
+      if (currentProfile && currentProfile.id === serviceSheet.created_by) {
+        // This is the current user, we can use their profile data
+        creatorEmail = currentProfile.email
+        creatorName = currentProfile.full_name || currentProfile.email
       } else {
-        // This is a different user, we need to create a migration function
-        
-        // For now, fallback to the hardcoded email until profiles are properly migrated
-        creatorEmail = 'nlanga@prifuturoconsultoria.com'
-        creatorName = 'Técnico'
-        
+        // Different user or no profile - use fallback
+        creatorEmail = 'Unknown'
+        creatorName = 'Unknown User'
       }
     }
 
@@ -308,17 +290,13 @@ export async function approveServiceSheet(token: string, feedback = "", approved
 
 export async function getAllServiceSheets() {
   const supabase = await createServerSupabaseClient()
-  
-  // Get current user
-  const { data: { user } } = await supabase.auth.getUser()
+
+  // Get current user and profile
+  const user = await getUser()
   if (!user) return []
 
-  // Get user profile to check role
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
+  const profile = await getUserProfile()
+  if (!profile) return []
 
   let query = supabase
     .from("service_sheets")
@@ -332,7 +310,7 @@ export async function getAllServiceSheets() {
   // - Admin and Observer can see all service sheets
   // - Technician can only see their own service sheets
   if (profile?.role === 'technician') {
-    query = query.eq('created_by', user.id)
+    query = query.eq('created_by', profile.id)
   }
   
   const { data, error } = await query.order("created_at", { ascending: false })
@@ -532,28 +510,23 @@ export async function resendApprovalEmail(id: string) {
 
 // Get current user profile
 export async function getCurrentUserProfile() {
-  const supabase = await createServerSupabaseClient()
-  
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  return profile
+  // Use the new getUserProfile from auth.ts
+  return await getUserProfile()
 }
 
 // Project CRUD operations
 export async function createProject(formData: any) {
   const supabase = await createServerSupabaseClient()
-  
-  // Get current user to set created_by
-  const { data: { user } } = await supabase.auth.getUser()
+
+  // Get current user and profile
+  const user = await getUser()
   if (!user) {
     return { success: false, error: "User not authenticated" }
+  }
+
+  const profile = await getUserProfile()
+  if (!profile) {
+    return { success: false, error: "User profile not found" }
   }
 
   // Add created_by to form data
@@ -573,9 +546,9 @@ export async function createProject(formData: any) {
 
 export async function getAllProjects() {
   const supabase = await createServerSupabaseClient()
-  
+
   // Get current user
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getUser()
   if (!user) return []
 
   // All users can see all projects for service sheet creation
@@ -692,9 +665,9 @@ export async function migrateUserProfiles() {
   const supabase = await createServerSupabaseClient()
   
   try {
-    
+
     // Get current user to ensure they're authenticated
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getUser()
     if (!user) {
       return { success: false, error: "User not authenticated" }
     }

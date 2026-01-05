@@ -1,11 +1,18 @@
-"use client"
+"use client";
 
-import { LogOut, ChevronUp, User2, Home, FileText, Users, FolderOpen } from "lucide-react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { createClient } from "@/utils/supabase/client"
-import { useToast } from "@/hooks/use-toast"
-import { getRoleTranslation } from "@/lib/role-translations"
+import {
+  LogOut,
+  ChevronUp,
+  User2,
+  Home,
+  FileText,
+  Users,
+  FolderOpen,
+} from "lucide-react";
+import Link from "next/link";
+import { useAuth } from "@/contexts/auth-context";
+import { useToast } from "@/hooks/use-toast";
+import { getRoleTranslation } from "@/lib/role-translations";
 
 import {
   Sidebar,
@@ -19,8 +26,13 @@ import {
   SidebarHeader,
   SidebarFooter,
   SidebarSeparator,
-} from "@/components/ui/sidebar"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+} from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // Icon mapping
 const iconMap = {
@@ -28,37 +40,75 @@ const iconMap = {
   FileText,
   Users,
   FolderOpen,
-}
+};
 
-interface AppSidebarClientProps {
-  user: any
-  profile: any
-  mainItems: any[]
-  secondaryItems: any[]
-}
+// Menu items with icon names instead of components
+const allMainItems = [
+  {
+    title: "Painel",
+    url: "/",
+    icon: "Home",
+  },
+  {
+    title: "Fichas de Serviço",
+    url: "/service-sheets",
+    icon: "FileText",
+  },
+];
 
-export function AppSidebarClient({ user, profile, mainItems, secondaryItems }: AppSidebarClientProps) {
-  const router = useRouter()
-  const { toast } = useToast()
-  const supabase = createClient()
+const allSecondaryItems = [
+  {
+    title: "Projetos",
+    url: "/projects",
+    icon: "FolderOpen",
+  },
+  {
+    title: "Usuários",
+    url: "/admin/users",
+    icon: "Users",
+  },
+];
+
+export function AppSidebarClient() {
+  const { user, logout } = useAuth();
+  const { toast } = useToast();
+
+  // Get user profile from local state
+  // Note: profile info is part of user object from AuthContext
+  const profile = user ? { role: user.role, full_name: user.fullName } : null;
+
+  // Filter menu items based on user role
+  let mainItems = allMainItems;
+  let secondaryItems = allSecondaryItems;
+
+  if (profile?.role === "observer") {
+    // Observers can only see Dashboard and Service Sheets
+    mainItems = allMainItems;
+    secondaryItems = []; // Remove all secondary items
+  } else if (profile?.role === "technician") {
+    // Technicians can see everything except Users
+    mainItems = allMainItems;
+    secondaryItems = allSecondaryItems.filter(
+      (item) => item.url !== "/admin/users"
+    );
+  }
+  // Admins see everything
 
   const handleSignOut = async () => {
     try {
-      await supabase.auth.signOut()
+      logout();
       toast({
         title: "Logout realizado",
         description: "Você foi desconectado com sucesso.",
-      })
-      router.push("/login")
-      router.refresh()
+      });
     } catch (error) {
       toast({
         title: "Erro",
         description: "Erro ao fazer logout",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   return (
     <Sidebar>
@@ -77,14 +127,15 @@ export function AppSidebarClient({ user, profile, mainItems, secondaryItems }: A
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      
+
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Aplicação</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {mainItems.map((item) => {
-                const IconComponent = iconMap[item.icon as keyof typeof iconMap]
+                const IconComponent =
+                  iconMap[item.icon as keyof typeof iconMap];
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild>
@@ -94,13 +145,13 @@ export function AppSidebarClient({ user, profile, mainItems, secondaryItems }: A
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                )
+                );
               })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {profile?.role === 'admin' && (
+        {profile?.role === "admin" && (
           <>
             <SidebarSeparator />
             <SidebarGroup>
@@ -108,7 +159,8 @@ export function AppSidebarClient({ user, profile, mainItems, secondaryItems }: A
               <SidebarGroupContent>
                 <SidebarMenu>
                   {secondaryItems.map((item) => {
-                    const IconComponent = iconMap[item.icon as keyof typeof iconMap]
+                    const IconComponent =
+                      iconMap[item.icon as keyof typeof iconMap];
                     return (
                       <SidebarMenuItem key={item.title}>
                         <SidebarMenuButton asChild>
@@ -118,7 +170,7 @@ export function AppSidebarClient({ user, profile, mainItems, secondaryItems }: A
                           </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
-                    )
+                    );
                   })}
                 </SidebarMenu>
               </SidebarGroupContent>
@@ -126,7 +178,7 @@ export function AppSidebarClient({ user, profile, mainItems, secondaryItems }: A
           </>
         )}
       </SidebarContent>
-      
+
       {user && (
         <SidebarFooter className="border-t border-sidebar-border">
           <SidebarMenu>
@@ -139,10 +191,10 @@ export function AppSidebarClient({ user, profile, mainItems, secondaryItems }: A
                     </div>
                     <div className="flex flex-col items-start text-left">
                       <span className="text-sm font-medium truncate">
-                        {user?.user_metadata?.full_name || profile?.full_name || "Usuário"}
+                        {user.fullName || "Usuário"}
                       </span>
                       <span className="text-xs text-muted-foreground truncate">
-                        {getRoleTranslation(profile?.role)}
+                        {getRoleTranslation(user.role)}
                       </span>
                     </div>
                     <ChevronUp className="ml-auto h-4 w-4" />
@@ -152,8 +204,12 @@ export function AppSidebarClient({ user, profile, mainItems, secondaryItems }: A
                   <DropdownMenuItem disabled>
                     <User2 className="mr-2 h-4 w-4" />
                     <div className="flex flex-col">
-                      <span className="text-sm">{user?.user_metadata?.full_name || profile?.full_name || "Usuário"}</span>
-                      <span className="text-xs text-muted-foreground">{user?.email}</span>
+                      <span className="text-sm">
+                        {user.fullName || "Usuário"}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {user.email}
+                      </span>
                     </div>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleSignOut}>
@@ -167,5 +223,5 @@ export function AppSidebarClient({ user, profile, mainItems, secondaryItems }: A
         </SidebarFooter>
       )}
     </Sidebar>
-  )
+  );
 }

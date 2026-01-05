@@ -1,85 +1,52 @@
-import { createServerClient } from '@supabase/ssr'
+/**
+ * Authentication Middleware
+ *
+ * Protects routes using JWT tokens stored in HTTP-only cookies
+ */
+
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  })
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
-        },
-        set(name: string, value: string, options: any) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-        },
-        remove(name: string, options: any) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-        },
-      },
-    }
-  )
-
-  // Get the current user
-  const { data: { user } } = await supabase.auth.getUser()
+  const { pathname } = request.nextUrl
 
   // Define public routes that don't require authentication
-  const publicRoutes = ['/login']
-  const isPublicRoute = publicRoutes.some(route => request.nextUrl.pathname.startsWith(route))
-  const isApprovalRoute = request.nextUrl.pathname.startsWith('/approval/')
+  const publicRoutes = ['/login', '/auth/callback', '/api/sync-tokens']
+  const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route))
 
-  // Allow access to approval routes (they use tokens for security)
+  // Allow access to approval routes (they use token-based security)
+  const isApprovalRoute = pathname.startsWith('/approval/')
   if (isApprovalRoute) {
-    return response
+    return NextResponse.next()
   }
 
-  // If user is not authenticated and trying to access a protected route
-  if (!user && !isPublicRoute) {
-    const redirectUrl = new URL('/login', request.url)
-    return NextResponse.redirect(redirectUrl)
+  // Get access token from cookie
+  const accessToken = request.cookies.get('access_token')?.value
+
+  console.log('[Middleware]', {
+    pathname,
+    isPublicRoute,
+    hasAccessToken: !!accessToken,
+    timestamp: new Date().toISOString(),
+  })
+
+  // If no token and accessing protected route, redirect to login
+  if (!accessToken && !isPublicRoute) {
+    console.log('[Middleware] No access token, redirecting to login')
+    const loginUrl = new URL('/login', request.url)
+    return NextResponse.redirect(loginUrl)
   }
 
-  // If user is authenticated and trying to access login, redirect to dashboard
-  if (user && isPublicRoute) {
-    const redirectUrl = new URL('/', request.url)
-    return NextResponse.redirect(redirectUrl)
+  // If has token and accessing login page specifically, redirect to dashboard
+  // Don't redirect /auth/callback or /api/sync-tokens
+  if (accessToken && pathname === '/login') {
+    console.log('[Middleware] Has token on login page, redirecting to dashboard')
+    const dashboardUrl = new URL('/', request.url)
+    return NextResponse.redirect(dashboardUrl)
   }
 
-  return response
+  // Allow request to proceed
+  console.log('[Middleware] Allowing request to proceed')
+  return NextResponse.next()
 }
 
 export const config = {
@@ -89,7 +56,7 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
+     * - public files (images, etc.)
      */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
