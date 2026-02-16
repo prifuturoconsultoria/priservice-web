@@ -6,35 +6,40 @@ import { useTransition, useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { createServiceSheet, updateServiceSheet, getAllProjects, getCurrentUserProfile, getProjectHoursInfo } from "@/lib/supabase"
+import { createServiceSheet, updateServiceSheet, getCurrentUserProfile, getAllProjects } from "@/lib/service-sheets-api"
+import type { CreateServiceSheetDto } from "@/types/service-sheet"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { RichTextEditor } from "@/components/ui/rich-text-editor"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { Send, Save } from "lucide-react"
+import { Send, Save, X, CheckCircle2, Circle, RotateCcw } from "lucide-react"
 
+// Schema for individual service line
+const lineSchema = z.object({
+  serviceDate: z.string().min(1, "A data é obrigatória"),
+  startTime: z.string().min(1, "A hora de início é obrigatória"),
+  endTime: z.string().min(1, "A hora de término é obrigatória"),
+  description: z.string().optional(),
+}).refine((data) => data.startTime < data.endTime, {
+  message: "A hora de término deve ser posterior à hora de início",
+  path: ["endTime"]
+})
+
+// Main form schema with multi-line support
 const formSchema = z.object({
-  project_id: z.string().min(1, "Projeto é obrigatório"),
-  subject: z.string().min(1, "Assunto é obrigatório").max(200, "Assunto muito longo"),
-  client_contact_name: z.string().min(1, "Nome do contato é obrigatório").max(100, "Nome muito longo"),
-  client_contact_email: z.string().email("Email inválido"),
-  client_contact_phone: z.string().optional(),
-  service_date: z.string().min(1, "Data do serviço é obrigatória"),
-  start_time: z.string().min(1, "Hora de início é obrigatória"),
-  end_time: z.string().min(1, "Hora de término é obrigatória"),
-  activity_description: z.string().min(10, "Descrição deve ter pelo menos 10 caracteres"),
-}).refine((data) => {
-  if (data.start_time && data.end_time) {
-    return data.start_time < data.end_time
-  }
-  return true
-}, {
-  message: "Hora de término deve ser posterior à hora de início",
-  path: ["end_time"]
+  projectId: z.string().min(1, "O projecto é obrigatório"),
+  subject: z.string().min(1, "O assunto é obrigatório").max(200, "Assunto demasiado longo"),
+  clientContactName: z.string().min(1, "O nome do contacto é obrigatório").max(100, "Nome demasiado longo"),
+  clientContactEmail: z.string().email("Endereço de email inválido"),
+  clientContactPhone: z.string().optional(),
+  ccEmails: z.array(z.string().email("Endereço de email inválido")).optional(),
+  lines: z.array(lineSchema).min(1, "Pelo menos um dia de trabalho é obrigatório").max(30, "Máximo de 30 dias permitido"),
+  activityDescription: z.string().min(10, "A descrição deve ter pelo menos 10 caracteres"),
 })
 
 type FormData = z.infer<typeof formSchema>
@@ -45,6 +50,9 @@ interface Project {
   company: string
   client_responsible: string
   partner_responsible: string
+  totalHours?: number
+  usedHours?: number
+  availableHours?: number
 }
 
 interface ServiceSheetFormProps {
@@ -57,20 +65,107 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [projectHoursInfo, setProjectHoursInfo] = useState<any>(null)
+  const [openAccordions, setOpenAccordions] = useState<string[]>(["project"])
+  const [hasAutoOpened, setHasAutoOpened] = useState<{ [key: string]: boolean }>({
+    client: false,
+    days: false,
+    activities: false
+  })
+
+  // Get today's date in YYYY-MM-DD format
+  const getTodayDate = () => {
+    const today = new Date()
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const day = String(today.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      project_id: "",
+      projectId: "",
       subject: "",
-      client_contact_name: "",
-      client_contact_email: "",
-      client_contact_phone: "",
-      service_date: "",
-      start_time: "",
-      end_time: "",
-      activity_description: "",
+      clientContactName: "",
+      clientContactEmail: "",
+      clientContactPhone: "",
+      ccEmails: [],
+      lines: [
+        {
+          serviceDate: getTodayDate(),
+          startTime: "",
+          endTime: "",
+          description: "",
+        }
+      ],
+      activityDescription: "",
     },
   })
+
+  // Calculate total hours from all lines
+  const calculateTotalHours = (lines: any[]): number => {
+    return lines.reduce((total, line) => {
+      if (line.startTime && line.endTime) {
+        const start = new Date(`2000-01-01T${line.startTime}`)
+        const end = new Date(`2000-01-01T${line.endTime}`)
+        const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60)
+        return total + (hours > 0 ? hours : 0)
+      }
+      return total
+    }, 0)
+  }
+
+  // Watch lines for real-time hour calculation
+  const watchedLines = form.watch("lines")
+  const totalHours = calculateTotalHours(watchedLines || [])
+
+  // Watch form fields for progressive accordion opening
+  const watchedProjectId = form.watch("projectId")
+  const watchedSubject = form.watch("subject")
+  const watchedClientName = form.watch("clientContactName")
+  const watchedClientEmail = form.watch("clientContactEmail")
+  const watchedActivityDescription = form.watch("activityDescription")
+
+  // Check section completion status
+  const isProjectComplete = watchedProjectId && watchedSubject
+  const isClientComplete = watchedClientName && watchedClientEmail && watchedClientEmail.includes('@')
+  const isDaysComplete = watchedLines && watchedLines.length > 0 &&
+    watchedLines[0].serviceDate &&
+    watchedLines[0].startTime &&
+    watchedLines[0].endTime &&
+    watchedLines[0].startTime < watchedLines[0].endTime
+  const isActivitiesComplete = watchedActivityDescription && watchedActivityDescription.length >= 10
+
+  // Progressive accordion opening logic (only auto-opens ONCE per section)
+  useEffect(() => {
+    // Auto-open client section when project is complete (only once)
+    if (isProjectComplete && !hasAutoOpened.client && !openAccordions.includes("client")) {
+      setOpenAccordions(prev => [...prev, "client"])
+      setHasAutoOpened(prev => ({ ...prev, client: true }))
+      // Smooth scroll to next section after a brief delay
+      setTimeout(() => {
+        document.getElementById("client-section")?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+      }, 100)
+    }
+
+    // Auto-open days section when client is complete (only once)
+    if (isClientComplete && !hasAutoOpened.days && !openAccordions.includes("days")) {
+      setOpenAccordions(prev => [...prev, "days"])
+      setHasAutoOpened(prev => ({ ...prev, days: true }))
+      setTimeout(() => {
+        document.getElementById("days-section")?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+      }, 100)
+    }
+
+    // Auto-open activities section when days is complete (only once)
+    if (isDaysComplete && !hasAutoOpened.activities && !openAccordions.includes("activities")) {
+      setOpenAccordions(prev => [...prev, "activities"])
+      setHasAutoOpened(prev => ({ ...prev, activities: true }))
+      setTimeout(() => {
+        document.getElementById("activities-section")?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+      }, 100)
+    }
+  }, [watchedProjectId, watchedSubject, watchedClientName, watchedClientEmail, watchedLines, watchedActivityDescription, isProjectComplete, isClientComplete, isDaysComplete, hasAutoOpened, openAccordions])
 
   useEffect(() => {
     const loadData = async () => {
@@ -79,35 +174,39 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
           getAllProjects(),
           getCurrentUserProfile()
         ])
-        
-        setProjects(projectsData)
-        setCurrentUser(userProfile)
-        
-        if (initialData) {
-          form.reset({
-            project_id: initialData.project_id || "",
-            subject: initialData.subject || "",
-            client_contact_name: initialData.client_contact_name || "",
-            client_contact_email: initialData.client_contact_email || "",
-            client_contact_phone: initialData.client_contact_phone || "",
-            service_date: initialData.service_date || "",
-            start_time: initialData.start_time || "",
-            end_time: initialData.end_time || "",
-            activity_description: initialData.activity_description || "",
-          })
+
+        // Ensure projects is always an array
+        if (Array.isArray(projectsData)) {
+          console.log('[ServiceSheetForm] Loaded', projectsData.length, 'projects successfully')
+          setProjects(projectsData)
         } else {
-          // Set default values for new service sheet
+          console.error('[ServiceSheetForm] Projects is not an array:', typeof projectsData)
+          setProjects([])
+        }
+        setCurrentUser(userProfile)
+
+        if (initialData) {
+          // Transform API data to form format if editing
           form.reset({
-            project_id: "",
-            subject: "",
-            client_contact_name: "",
-            client_contact_email: "",
-            client_contact_phone: "",
-            service_date: "",
-            start_time: "",
-            end_time: "",
-            activity_description: "",
+            projectId: initialData.projectId || initialData.project_id || "",
+            subject: initialData.subject || "",
+            clientContactName: initialData.clientContactName || initialData.client_contact_name || "",
+            clientContactEmail: initialData.clientContactEmail || initialData.client_contact_email || "",
+            clientContactPhone: initialData.clientContactPhone || initialData.client_contact_phone || "",
+            ccEmails: initialData.ccEmails || [],
+            lines: initialData.lines && initialData.lines.length > 0
+              ? initialData.lines.map((line: any) => ({
+                  serviceDate: line.serviceDate || line.service_date || "",
+                  startTime: line.startTime?.substring(0, 5) || line.start_time?.substring(0, 5) || "",
+                  endTime: line.endTime?.substring(0, 5) || line.end_time?.substring(0, 5) || "",
+                  description: line.description || "",
+                }))
+              : [{ serviceDate: initialData.service_date || "", startTime: initialData.start_time?.substring(0, 5) || "", endTime: initialData.end_time?.substring(0, 5) || "", description: "" }],
+            activityDescription: initialData.activityDescription || initialData.activity_description || "",
           })
+
+          // Open all accordions in edit mode
+          setOpenAccordions(["project", "client", "days", "activities"])
         }
       } catch (error) {
         console.error('Error loading data:', error)
@@ -115,23 +214,39 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
         setIsLoadingData(false)
       }
     }
-    
+
     loadData()
   }, [initialData, form])
 
-  // Watch for project selection changes and fetch hours info
-  const selectedProjectId = form.watch("project_id")
+  // Watch for project selection changes and extract hours info from existing data
+  const selectedProjectId = form.watch("projectId")
   useEffect(() => {
-    const loadProjectHours = async () => {
-      if (selectedProjectId) {
-        const hoursInfo = await getProjectHoursInfo(selectedProjectId)
-        setProjectHoursInfo(hoursInfo)
+    if (selectedProjectId && projects.length > 0) {
+      // Find the selected project in the already loaded projects array
+      const selectedProject = projects.find(p => p.id === selectedProjectId)
+
+      if (selectedProject) {
+        // Extract hours info directly from the project data
+        setProjectHoursInfo({
+          totalHours: selectedProject.totalHours || 0,
+          usedHours: selectedProject.usedHours || 0,
+          availableHours: selectedProject.availableHours ||
+            ((selectedProject.totalHours || 0) - (selectedProject.usedHours || 0)),
+          projectName: selectedProject.name || ''
+        })
+        console.log('[ServiceSheetForm] Project hours info:', {
+          name: selectedProject.name,
+          total: selectedProject.totalHours,
+          used: selectedProject.usedHours,
+          available: selectedProject.availableHours
+        })
       } else {
         setProjectHoursInfo(null)
       }
+    } else {
+      setProjectHoursInfo(null)
     }
-    loadProjectHours()
-  }, [selectedProjectId])
+  }, [selectedProjectId, projects])
 
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
@@ -155,13 +270,31 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
 
   const onSubmit = async (data: FormData) => {
     startTransition(async () => {
+      // Transform form data to API format
+      const apiData: CreateServiceSheetDto = {
+        projectId: data.projectId,
+        subject: data.subject,
+        clientContactName: data.clientContactName,
+        clientContactEmail: data.clientContactEmail,
+        clientContactPhone: data.clientContactPhone || undefined,
+        ccEmails: data.ccEmails && data.ccEmails.length > 0 ? data.ccEmails.filter(e => e.trim()) : undefined,
+        activityDescription: data.activityDescription,
+        lines: data.lines.map((line, index) => ({
+          lineNumber: index + 1,
+          serviceDate: line.serviceDate,
+          startTime: line.startTime, // HH:mm format (no seconds)
+          endTime: line.endTime, // HH:mm format (no seconds)
+          description: line.description || undefined,
+        })),
+      }
+
       let result
       if (isEditing && initialData) {
-        result = await updateServiceSheet(initialData.id, data)
+        result = await updateServiceSheet(initialData.id, apiData)
       } else {
-        result = await createServiceSheet(data)
+        result = await createServiceSheet(apiData)
       }
-      
+
       if (result.success) {
         if (isEditing) {
           toast({
@@ -172,14 +305,14 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
         } else {
           toast({
             title: "Sucesso!",
-            description: "Ficha de serviço criada! E-mail de aprovação simulado para o cliente.",
+            description: "Ficha de serviço criada! Email de aprovação enviado ao cliente.",
           })
           router.push("/service-sheets")
         }
       } else {
         toast({
           title: "Erro",
-          description: `Erro ao ${isEditing ? 'atualizar' : 'criar'} ficha de serviço: ${result.error}`,
+          description: result.error || `Erro ao ${isEditing ? 'atualizar' : 'criar'} ficha de serviço`,
           variant: "destructive",
         })
       }
@@ -189,40 +322,56 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6">
       <div className="text-center space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">{isEditing ? 'Editar Ficha de Serviço' : 'Nova Ficha de Serviço'}</h1>
-        <p className="text-muted-foreground">{isEditing ? 'Atualize os detalhes do serviço realizado' : 'Preencha as informações do serviço prestado'}</p>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{isEditing ? 'Editar Ficha de Serviço' : 'Nova Ficha de Serviço'}</h1>
+        <p className="text-muted-foreground text-sm md:text-base">{isEditing ? 'Actualize os detalhes do serviço realizado' : 'Preencha as informações do serviço prestado'}</p>
       </div>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-          {/* Project Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-blue-500"></div>
-                Informações do Projeto
-              </CardTitle>
-              <CardDescription>Selecione o projeto para esta ficha de serviço</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <Accordion
+            type="multiple"
+            value={openAccordions}
+            onValueChange={setOpenAccordions}
+            className="space-y-4"
+          >
+            {/* Project Information */}
+            <AccordionItem value="project" className="border rounded-lg px-4 bg-card">
+              <AccordionTrigger className="hover:no-underline py-4">
+                <div className="flex items-center gap-3 text-base md:text-lg font-semibold">
+                  {isProjectComplete ? (
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <Circle className="h-5 w-5 text-muted-foreground" />
+                  )}
+                  <span>Informações do Projecto</span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pb-4">
+                <div className="space-y-6 pt-2">
               <FormField
                 control={form.control}
-                name="project_id"
+                name="projectId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">Projeto *</FormLabel>
+                    <FormLabel className="text-sm font-medium">Projecto *</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Selecione um projeto" />
+                          <SelectValue placeholder="Seleccione um projecto" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {projects.map((project) => (
-                          <SelectItem key={project.id} value={project.id}>
-                            {project.name} - {project.company}
-                          </SelectItem>
-                        ))}
+                        {projects && projects.length > 0 ? (
+                          projects.map((project) => (
+                            <SelectItem key={project.id} value={project.id}>
+                              {project.name} - {project.company}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                            {isLoadingData ? 'A carregar projectos...' : 'Nenhum projecto disponível'}
+                          </div>
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -234,7 +383,7 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
                 <div className="p-4 rounded-lg bg-muted/50 border">
                   <div className="flex items-center justify-between text-sm">
                     <div>
-                      <span className="font-medium">Horas do Projeto:</span>
+                      <span className="font-medium">Horas do Projecto:</span>
                       <span className="ml-2 text-muted-foreground">
                         {projectHoursInfo.usedHours.toFixed(2)}h / {projectHoursInfo.totalHours.toFixed(2)}h utilizadas
                       </span>
@@ -250,187 +399,405 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
                 </div>
               )}
 
-              <FormField
-                control={form.control}
-                name="subject"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">Assunto *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ex: Manutenção preventiva dos servidores" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
+                  <FormField
+                    control={form.control}
+                    name="subject"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">Assunto *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Ex: Manutenção preventiva dos servidores" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </AccordionContent>
+            </AccordionItem>
 
-          {/* Client Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                Informações do Cliente
-              </CardTitle>
-              <CardDescription>Dados de contato e empresa do cliente</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 gap-4">
-                <FormField
-                  control={form.control}
-                  name="client_contact_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Pessoa de Contato *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Nome do responsável" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+            {/* Client Information */}
+            <AccordionItem value="client" className="border rounded-lg px-4 bg-card" id="client-section">
+              <AccordionTrigger className="hover:no-underline py-4">
+                <div className="flex items-center gap-3 text-base md:text-lg font-semibold">
+                  {isClientComplete ? (
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <Circle className="h-5 w-5 text-muted-foreground" />
                   )}
-                />
-              </div>
+                  <span>Informações do Cliente</span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pb-4">
+                <div className="space-y-6 pt-2">
+                  <div className="grid grid-cols-1 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="clientContactName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-sm font-medium">Pessoa de Contacto Principal *</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Nome do responsável" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="client_contact_email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Email *</FormLabel>
-                      <FormControl>
-                        <Input type="email" placeholder="contato@empresa.com" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="client_contact_phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Telefone</FormLabel>
-                      <FormControl>
-                        <Input type="tel" placeholder="841211212" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </CardContent>
-          </Card>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="clientContactEmail"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-sm font-medium">Email Principal *</FormLabel>
+                          <FormControl>
+                            <Input type="email" placeholder="contacto@empresa.co.mz" {...field} />
+                          </FormControl>
+                          <p className="text-xs text-muted-foreground">Este email poderá aprovar a ficha</p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="clientContactPhone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-sm font-medium">Telefone/Telemóvel</FormLabel>
+                          <FormControl>
+                            <Input type="tel" placeholder="84 123 4567" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
-          {/* Service Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-orange-500"></div>
-                Detalhes do Serviço
-              </CardTitle>
-              <CardDescription>Horários e descrição das atividades realizadas</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name="service_date"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Data do Serviço *</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="start_time"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Início *</FormLabel>
-                      <FormControl>
-                        <Input type="time" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="end_time"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">Término *</FormLabel>
-                      <FormControl>
-                        <Input type="time" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                  {/* CC Emails merged here */}
+                  <div className="pt-4 border-t">
+                    <FormField
+                      control={form.control}
+                      name="ccEmails"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-sm font-medium">Emails em Cópia (CC) - Opcional</FormLabel>
+                          <FormControl>
+                            <div className="space-y-2">
+                              {field.value?.map((email, index) => (
+                                <div key={index} className="flex items-center gap-2">
+                                  <Input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => {
+                                      const newEmails = [...(field.value || [])]
+                                      newEmails[index] = e.target.value
+                                      field.onChange(newEmails)
+                                    }}
+                                    placeholder="email@exemplo.co.mz"
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      const newEmails = field.value?.filter((_, i) => i !== index)
+                                      field.onChange(newEmails)
+                                    }}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ))}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  field.onChange([...(field.value || []), ""])
+                                }}
+                              >
+                                + Adicionar Email CC
+                              </Button>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Pessoas em CC também poderão aprovar a ficha
+                          </p>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
 
-              <FormField
-                control={form.control}
-                name="activity_description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">Descrição das Atividades *</FormLabel>
-                    <FormControl>
-                      <RichTextEditor
-                        content={field.value}
-                        onChange={field.onChange}
-                        placeholder="Descreva detalhadamente as atividades realizadas, problemas encontrados, soluções implementadas..."
-                        className="min-h-[250px]"
+            {/* Service Days (Multi-line) */}
+            <AccordionItem value="days" className="border rounded-lg px-4 bg-card" id="days-section">
+              <AccordionTrigger className="hover:no-underline py-4">
+                <div className="flex items-center gap-3 text-base md:text-lg font-semibold">
+                  {isDaysComplete ? (
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <Circle className="h-5 w-5 text-muted-foreground" />
+                  )}
+                  <span>Dias de Trabalho</span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pb-4">
+                <div className="space-y-4 pt-2">
+                  {form.watch("lines")?.map((_, index) => (
+                    <div key={index} className="p-4 border rounded-lg space-y-4 relative">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-sm">Dia {index + 1}</span>
+                        {form.watch("lines")?.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const currentLines = form.getValues("lines")
+                              form.setValue("lines", currentLines.filter((_, i) => i !== index))
+                            }}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            Remover
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FormField
+                          control={form.control}
+                          name={`lines.${index}.serviceDate`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">Data *</FormLabel>
+                              <FormControl>
+                                <Input type="date" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name={`lines.${index}.startTime`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">Início *</FormLabel>
+                              <FormControl>
+                                <Input type="time" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name={`lines.${index}.endTime`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm">Término *</FormLabel>
+                              <FormControl>
+                                <Input type="time" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.description`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-sm">Descrição (opcional)</FormLabel>
+                            <FormControl>
+                              <textarea
+                                {...field}
+                                placeholder="Breve descrição das actividades realizadas neste dia..."
+                                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
-                    </FormControl>
-                    <p className="text-xs text-muted-foreground">
-                      Use a barra de ferramentas para formatar o texto
-                    </p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
+                    </div>
+                  ))}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      const currentLines = form.getValues("lines") || []
+                      form.setValue("lines", [
+                        ...currentLines,
+                        { serviceDate: "", startTime: "", endTime: "", description: "" }
+                      ])
+                    }}
+                    className="w-full"
+                  >
+                    + Adicionar Dia
+                  </Button>
+
+                  {/* Total Hours Display */}
+                  <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-base text-blue-900">Total de Horas:</span>
+                      <span className="text-2xl font-bold text-blue-700">
+                        {totalHours.toFixed(2)}h
+                      </span>
+                    </div>
+                    {projectHoursInfo && totalHours > projectHoursInfo.availableHours && (
+                      <p className="text-xs text-red-600 mt-2">
+                        ⚠️ Atenção: O total de horas excede as horas disponíveis do projecto
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+
+            {/* Activity Description */}
+            <AccordionItem value="activities" className="border rounded-lg px-4 bg-card" id="activities-section">
+              <AccordionTrigger className="hover:no-underline py-4">
+                <div className="flex items-center gap-3 text-base md:text-lg font-semibold">
+                  {isActivitiesComplete ? (
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <Circle className="h-5 w-5 text-muted-foreground" />
+                  )}
+                  <span>Descrição das Actividades</span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pb-4">
+                <div className="pt-2">
+                  <FormField
+                    control={form.control}
+                    name="activityDescription"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">Descrição *</FormLabel>
+                        <FormControl>
+                          <RichTextEditor
+                            content={field.value}
+                            onChange={field.onChange}
+                            placeholder="Descreva detalhadamente as actividades realizadas, problemas encontrados, soluções implementadas..."
+                            className="min-h-[250px]"
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Utilize a barra de ferramentas para formatar o texto
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
 
           {/* Submit Actions */}
-          <Card className="bg-muted/30">
-            <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Button type="submit" className="flex-1 h-11" disabled={isPending}>
-                  {isPending ? (
-                    <>
-                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
-                      Salvando...
-                    </>
-                  ) : (
-                    <>
-                      {isEditing ? <Save className="mr-2 h-4 w-4" /> : <Send className="mr-2 h-4 w-4" />}
-                      {isEditing ? "Atualizar Ficha" : "Enviar Ficha"}
-                    </>
-                  )}
-                </Button>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  className="sm:w-32 h-11"
-                  onClick={() => router.back()}
-                  disabled={isPending}
-                >
-                  Cancelar
-                </Button>
+          <Card className="border-2">
+            <CardContent className="pt-6 pb-6">
+              <div className="space-y-4">
+                {/* Buttons Row */}
+                <div className="flex flex-col sm:flex-row gap-3 justify-between items-stretch sm:items-center">
+                  {/* Left side - Clear button */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="sm:w-auto h-11 border-dashed"
+                    onClick={() => {
+                      if (confirm('Tem a certeza que deseja limpar todos os campos? Esta acção não pode ser desfeita.')) {
+                        form.reset({
+                          projectId: "",
+                          subject: "",
+                          clientContactName: "",
+                          clientContactEmail: "",
+                          clientContactPhone: "",
+                          ccEmails: [],
+                          lines: [{
+                            serviceDate: getTodayDate(),
+                            startTime: "",
+                            endTime: "",
+                            description: "",
+                          }],
+                          activityDescription: "",
+                        })
+                        setProjectHoursInfo(null)
+                        setOpenAccordions(["project"])
+                        setHasAutoOpened({
+                          client: false,
+                          days: false,
+                          activities: false
+                        })
+                        toast({
+                          title: "Campos limpos",
+                          description: "Todos os campos foram limpos com sucesso",
+                        })
+                      }
+                    }}
+                    disabled={isPending}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Limpar Campos
+                  </Button>
+
+                  {/* Right side - Primary actions */}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="sm:w-32 h-11"
+                      onClick={() => router.back()}
+                      disabled={isPending}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={isPending}
+                      className="sm:w-56 h-12 text-base font-semibold"
+                    >
+                      {isPending ? (
+                        <>
+                          <div className="mr-2 h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                          A guardar...
+                        </>
+                      ) : (
+                        <>
+                          {isEditing ? <Save className="mr-2 h-5 w-5" /> : <Send className="mr-2 h-5 w-5" />}
+                          {isEditing ? "Actualizar Ficha" : "Enviar Ficha"}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Help text */}
+                {!isEditing && (
+                  <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                    <div className="text-blue-600 mt-0.5">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <p className="text-xs text-blue-800 leading-relaxed">
+                      Após enviar, o cliente receberá um email para aprovação da ficha de serviço
+                    </p>
+                  </div>
+                )}
               </div>
-              {!isEditing && (
-                <p className="text-xs text-muted-foreground mt-3 text-center">
-                  Após enviar, o cliente receberá um email para aprovação da ficha de serviço
-                </p>
-              )}
             </CardContent>
           </Card>
         </form>

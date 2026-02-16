@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
 import { createClient } from "@/utils/supabase/client"
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/app-sidebar"
+import { AppSidebarClient } from "@/components/app-sidebar-client"
 
 interface AuthLayoutWrapperProps {
   children: React.ReactNode
@@ -67,7 +67,7 @@ export function AuthLayoutWrapper({ children }: AuthLayoutWrapperProps) {
   // For authenticated routes, show sidebar layout
   return (
     <SidebarProvider defaultOpen={true}>
-      <AppSidebar />
+      <AppSidebarClient />
       <SidebarInset>
         <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
           <SidebarTrigger />

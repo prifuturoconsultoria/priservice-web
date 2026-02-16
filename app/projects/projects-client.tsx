@@ -39,7 +39,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { getAllProjects, deleteProject } from "@/lib/supabase";
+import { getAllProjects } from "@/lib/service-sheets-api";
+import { deleteProject } from "@/lib/supabase";
 import { format } from "date-fns";
 import { MoreHorizontal, Eye, Edit, Trash2, Search, X, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";

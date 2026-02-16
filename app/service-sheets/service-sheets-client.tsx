@@ -51,7 +51,8 @@ import {
   deleteServiceSheet,
   resendApprovalEmail,
   getCurrentUserProfile,
-} from "@/lib/supabase";
+} from "@/lib/service-sheets-api";
+import type { ServiceSheet } from "@/types/service-sheet";
 import { format } from "date-fns";
 import { MoreHorizontal, Eye, Edit, Trash2, Mail, Search, Filter, Calendar, X, Sparkles, Download, Clock, ChevronUp, ChevronDown, ChevronsUpDown, FileDown } from "lucide-react";
 import { exportServiceSheetsToExcel } from "@/lib/excel-export";
@@ -60,12 +61,12 @@ import { PDFGenerator } from "@/components/pdf-generator";
 import { useRouter } from "next/navigation";
 
 interface ServiceSheetsClientProps {
-  initialData: any[]
+  initialData: ServiceSheet[]
 }
 
 export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
-  const [serviceSheets, setServiceSheets] = useState(initialData);
-  const [filteredSheets, setFilteredSheets] = useState(initialData);
+  const [serviceSheets, setServiceSheets] = useState<ServiceSheet[]>(initialData);
+  const [filteredSheets, setFilteredSheets] = useState<ServiceSheet[]>(initialData);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [projectFilter, setProjectFilter] = useState("all");
@@ -80,36 +81,25 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
   const { toast } = useToast();
   const router = useRouter();
 
-  // Calculate hours difference
-  const calculateHours = (startTime: string, endTime: string): string => {
-    try {
-      const [startHour, startMinute] = startTime.split(':').map(Number);
-      const [endHour, endMinute] = endTime.split(':').map(Number);
-      
-      const startMinutes = startHour * 60 + startMinute;
-      const endMinutes = endHour * 60 + endMinute;
-      
-      let diffMinutes = endMinutes - startMinutes;
-      if (diffMinutes < 0) {
-        // Handle overnight work
-        diffMinutes += 24 * 60;
-      }
-      
-      const hours = Math.floor(diffMinutes / 60);
-      const minutes = diffMinutes % 60;
-      
-      if (minutes === 0) {
-        return `${hours}h`;
-      } else {
-        return `${hours}h${minutes.toString().padStart(2, '0')}m`;
-      }
-    } catch (error) {
-      return "N/A";
+  // Display hours from API (already calculated)
+  const displayHours = (sheet: ServiceSheet): string => {
+    return sheet.totalHours ? `${sheet.totalHours.toFixed(1)}h` : "N/A";
+  };
+
+  // Get date display for multi-line sheets
+  const getDateDisplay = (sheet: ServiceSheet): string => {
+    if (!sheet.lines || sheet.lines.length === 0) return "N/A";
+
+    if (sheet.lines.length === 1) {
+      return format(new Date(sheet.lines[0].serviceDate), "dd/MM/yyyy");
     }
+
+    // Multi-day sheet: show date range
+    return `${format(new Date(sheet.lines[0].serviceDate), "dd/MM")} - ${format(new Date(sheet.lines[sheet.lines.length - 1].serviceDate), "dd/MM/yy")}`;
   };
 
   // Get unique projects for filter
-  const uniqueProjects = Array.from(new Set(serviceSheets.map(sheet => sheet.projects?.name).filter(Boolean)));
+  const uniqueProjects = Array.from(new Set(serviceSheets.map(sheet => sheet.project?.name).filter(Boolean)));
 
   // Handle sorting
   const handleSort = (field: 'project' | 'date') => {
@@ -128,7 +118,7 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
     if (sortField !== field) {
       return <ChevronsUpDown className="h-3 w-3 text-muted-foreground" />;
     }
-    return sortDirection === 'asc' 
+    return sortDirection === 'asc'
       ? <ChevronUp className="h-3 w-3 text-blue-600" />
       : <ChevronDown className="h-3 w-3 text-blue-600" />;
   };
@@ -152,11 +142,11 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
     if (searchTerm) {
       filtered = filtered.filter(
         (sheet) =>
-          sheet.projects?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          sheet.profiles?.full_name
+          sheet.project?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          sheet.createdBy?.fullName
             ?.toLowerCase()
             .includes(searchTerm.toLowerCase()) ||
-          sheet.projects?.company?.toLowerCase().includes(searchTerm.toLowerCase())
+          sheet.project?.company?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -165,26 +155,30 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
     }
 
     if (projectFilter !== "all") {
-      filtered = filtered.filter((sheet) => sheet.projects?.name === projectFilter);
+      filtered = filtered.filter((sheet) => sheet.project?.name === projectFilter);
     }
 
     if (dateFilter) {
-      filtered = filtered.filter((sheet) => sheet.service_date === dateFilter);
+      // Check if any line matches the date filter
+      filtered = filtered.filter((sheet) =>
+        sheet.lines?.some(line => line.serviceDate === dateFilter)
+      );
     }
 
     // Apply sorting
     if (sortField) {
       filtered.sort((a, b) => {
-        let aValue, bValue;
-        
+        let aValue: any, bValue: any;
+
         if (sortField === 'project') {
-          aValue = a.projects?.name || '';
-          bValue = b.projects?.name || '';
+          aValue = a.project?.name || '';
+          bValue = b.project?.name || '';
         } else if (sortField === 'date') {
-          aValue = new Date(a.service_date);
-          bValue = new Date(b.service_date);
+          // Sort by first service date
+          aValue = a.lines && a.lines.length > 0 ? new Date(a.lines[0].serviceDate) : new Date(0);
+          bValue = b.lines && b.lines.length > 0 ? new Date(b.lines[0].serviceDate) : new Date(0);
         }
-        
+
         if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
         if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
         return 0;

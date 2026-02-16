@@ -3,9 +3,12 @@
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { getServiceSheetById, deleteServiceSheet, resendApprovalEmail, getCurrentUserProfile } from "@/lib/supabase"
+import { getServiceSheetById, deleteServiceSheet, resendApprovalEmail, getCurrentUserProfile } from "@/lib/service-sheets-api"
+import type { ServiceSheet } from "@/types/service-sheet"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
@@ -34,16 +37,24 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
 
   useEffect(() => {
     let mounted = true;
-    
+
     async function fetchData() {
       try {
-        const [sheet, profile] = await Promise.all([
+        const [sheetResult, profile] = await Promise.all([
           getServiceSheetById(resolvedParams.id),
           getCurrentUserProfile()
         ])
-        
+
         if (mounted) {
-          setServiceSheet(sheet)
+          if (sheetResult.success && sheetResult.data) {
+            setServiceSheet(sheetResult.data)
+          } else {
+            toast({
+              title: "Erro",
+              description: sheetResult.error || "Erro ao carregar ficha de serviço",
+              variant: "destructive",
+            })
+          }
           setUserProfile(profile)
           setLoading(false)
         }
@@ -59,9 +70,9 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
         }
       }
     }
-    
+
     fetchData()
-    
+
     return () => {
       mounted = false;
     };
@@ -205,7 +216,7 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
                 <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground mb-2">
                   {serviceSheet.subject || serviceSheet.projects?.name || 'N/A'}
                 </h1>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm md:text-base text-muted-foreground">
                   {serviceSheet.projects?.name || 'Projeto não especificado'} • Ficha de serviço técnico
                 </p>
               </div>
@@ -315,237 +326,283 @@ export default function ServiceSheetDetailsPage({ params }: { params: Promise<{ 
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           {/* Left Column - Main Information */}
-          <div className="xl:col-span-2 space-y-8">
-            {/* Project Information */}
-            <Card className="overflow-hidden border-0 shadow-lg bg-card/50 backdrop-blur">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
-                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                  <div className="h-2 w-2 rounded-full bg-blue-500 shadow-sm"></div>
-                  Informações do Projeto
-                </CardTitle>
-                <CardDescription className="text-xs md:text-sm">
-                  Detalhes sobre o serviço executado
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {serviceSheet.subject && (
-                    <div className="space-y-2 md:col-span-2">
-                      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        <Type className="h-3 w-3" />
-                        Assunto
-                      </div>
-                      <p className="text-base md:text-lg font-semibold text-foreground">{serviceSheet.subject}</p>
-                    </div>
-                  )}
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      <User className="h-3 w-3" />
-                      Técnico Responsável
-                    </div>
-                    <p className="text-base md:text-lg font-semibold text-foreground">{serviceSheet.profiles?.full_name || 'N/A'}</p>
+          <div className="xl:col-span-2 space-y-6">
+            <Accordion type="multiple" defaultValue={["project", "hours", "activities", "feedback"]} className="space-y-4">
+              {/* Project Information */}
+              <AccordionItem value="project" className="border rounded-lg px-4 bg-card/50 backdrop-blur">
+                <AccordionTrigger className="hover:no-underline py-4">
+                  <div className="flex items-center gap-2 text-base md:text-lg font-semibold">
+                    <div className="h-2 w-2 rounded-full bg-blue-500 shadow-sm"></div>
+                    Informações do Projeto
                   </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      <Calendar className="h-3 w-3" />
-                      Data do Serviço
-                    </div>
-                    <p className="text-base md:text-lg font-semibold text-foreground">
-                      {format(new Date(serviceSheet.service_date), "dd/MM/yyyy")}
-                    </p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      <Clock className="h-3 w-3" />
-                      Horário de Execução
-                    </div>
-                    <p className="text-base md:text-lg font-semibold text-foreground">
-                      {serviceSheet.start_time} - {serviceSheet.end_time}
-                    </p>
-                  </div>
-                  
-                  {serviceSheet.approved_at && (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        <CheckCircle className="h-3 w-3" />
-                        Data de Aprovação
-                      </div>
-                      <p className="text-base md:text-lg font-semibold text-foreground">
-                        {format(new Date(serviceSheet.approved_at), "dd/MM/yyyy")}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                </AccordionTrigger>
+                <AccordionContent className="pb-4">
+                  <div className="pt-2 px-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {serviceSheet.subject && (
+                        <div className="space-y-2 md:col-span-2">
+                          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            <Type className="h-3 w-3" />
+                            Assunto
+                          </div>
+                          <p className="text-base md:text-lg font-semibold text-foreground">{serviceSheet.subject}</p>
+                        </div>
+                      )}
 
-            {/* Activity Description */}
-            <Card className="overflow-hidden border-0 shadow-lg bg-card/50 backdrop-blur">
-              <CardHeader className="bg-gradient-to-r from-orange-50 to-amber-50 border-b">
-                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                  <div className="h-2 w-2 rounded-full bg-orange-500 shadow-sm"></div>
-                  Atividades Realizadas
-                </CardTitle>
-                <CardDescription className="text-xs md:text-sm">
-                  Descrição detalhada dos serviços executados
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-4 md:p-6">
-                <div className="prose prose-slate max-w-none">
-                  <div className="bg-gradient-to-br from-slate-50 to-gray-50 rounded-xl p-4 md:p-6 border border-slate-200 shadow-inner">
-                    <div 
-                      className="text-slate-800 leading-relaxed text-sm md:text-base prose prose-sm max-w-none [&>*]:m-0 [&>*:not(:last-child)]:mb-4 [&>ul]:list-disc [&>ol]:list-decimal [&>ul]:ml-4 [&>ol]:ml-4 [&>blockquote]:border-l-4 [&>blockquote]:border-slate-300 [&>blockquote]:pl-4 [&>blockquote]:italic [&>p]:leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: serviceSheet.activity_description }}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          <User className="h-3 w-3" />
+                          Técnico Responsável
+                        </div>
+                        <p className="text-base md:text-lg font-semibold text-foreground">{serviceSheet.createdBy?.fullName || 'N/A'}</p>
+                      </div>
 
-            {/* Client Feedback */}
-            {serviceSheet.client_feedback && (
-              <Card className="overflow-hidden border-0 shadow-lg bg-card/50 backdrop-blur">
-                <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b">
-                  <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                    <MessageSquare className="h-4 w-4 text-emerald-600" />
-                    Feedback do Cliente
-                  </CardTitle>
-                  <CardDescription className="text-xs md:text-sm">
-                    Avaliação e comentários do cliente sobre o serviço
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-4 md:p-6">
-                  <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4 md:p-6 border border-emerald-200 shadow-inner">
-                    <p className="text-emerald-900 leading-relaxed whitespace-pre-line text-sm md:text-base m-0">
-                      {serviceSheet.client_feedback}
-                    </p>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          <Clock className="h-3 w-3" />
+                          Total de Horas
+                        </div>
+                        <p className="text-base md:text-lg font-semibold text-foreground">
+                          {serviceSheet.totalHours ? `${serviceSheet.totalHours}h` : 'N/A'}
+                        </p>
+                      </div>
+
+                      {serviceSheet.approvedAt && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            <CheckCircle className="h-3 w-3" />
+                            Data de Aprovação
+                          </div>
+                          <p className="text-base md:text-lg font-semibold text-foreground">
+                            {format(new Date(serviceSheet.approvedAt), "dd/MM/yyyy 'às' HH:mm")}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* Service Lines Breakdown */}
+              {serviceSheet.lines && serviceSheet.lines.length > 0 && (
+                <AccordionItem value="hours" className="border rounded-lg px-4 bg-card/50 backdrop-blur">
+                  <AccordionTrigger className="hover:no-underline py-4">
+                    <div className="flex items-center gap-2 text-base md:text-lg font-semibold">
+                      <div className="h-2 w-2 rounded-full bg-purple-500 shadow-sm"></div>
+                      Detalhamento de Horas
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-4">
+                    <div className="pt-2">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">Data</TableHead>
+                            <TableHead className="text-xs">Início</TableHead>
+                            <TableHead className="text-xs">Término</TableHead>
+                            <TableHead className="text-xs">Descrição</TableHead>
+                            <TableHead className="text-right text-xs">Horas</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {serviceSheet.lines.map((line: any) => (
+                            <TableRow key={line.id}>
+                              <TableCell className="font-medium text-xs md:text-sm">
+                                {format(new Date(line.serviceDate), "dd/MM/yyyy")}
+                              </TableCell>
+                              <TableCell className="font-mono text-xs">{line.startTime?.substring(0, 5)}</TableCell>
+                              <TableCell className="font-mono text-xs">{line.endTime?.substring(0, 5)}</TableCell>
+                              <TableCell className="text-xs md:text-sm max-w-xs">
+                                {line.description ? (
+                                  <span className="text-muted-foreground">{line.description}</span>
+                                ) : (
+                                  <span className="text-muted-foreground italic">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold text-xs md:text-sm">
+                                {line.hours}h
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow className="font-bold bg-muted/50">
+                            <TableCell colSpan={4} className="text-right text-xs md:text-sm">Total</TableCell>
+                            <TableCell className="text-right text-base md:text-lg">
+                              {serviceSheet.totalHours}h
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              )}
+
+              {/* Activity Description */}
+              <AccordionItem value="activities" className="border rounded-lg px-4 bg-card/50 backdrop-blur">
+                <AccordionTrigger className="hover:no-underline py-4">
+                  <div className="flex items-center gap-2 text-base md:text-lg font-semibold">
+                    <div className="h-2 w-2 rounded-full bg-orange-500 shadow-sm"></div>
+                    Atividades Realizadas
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="pb-4">
+                  <div className="pt-2 px-4">
+                    <div className="prose prose-slate max-w-none">
+                      <div className="bg-gradient-to-br from-slate-50 to-gray-50 rounded-xl p-4 md:p-6 border border-slate-200 shadow-inner">
+                        <div
+                          className="text-slate-800 leading-relaxed text-xs md:text-sm prose prose-sm max-w-none [&>*]:m-0 [&>*:not(:last-child)]:mb-4 [&>ul]:list-disc [&>ol]:list-decimal [&>ul]:ml-4 [&>ol]:ml-4 [&>blockquote]:border-l-4 [&>blockquote]:border-slate-300 [&>blockquote]:pl-4 [&>blockquote]:italic [&>p]:leading-relaxed"
+                          dangerouslySetInnerHTML={{ __html: serviceSheet.activity_description }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* Client Feedback */}
+              {serviceSheet.client_feedback && (
+                <AccordionItem value="feedback" className="border rounded-lg px-4 bg-card/50 backdrop-blur">
+                  <AccordionTrigger className="hover:no-underline py-4">
+                    <div className="flex items-center gap-2 text-base md:text-lg font-semibold">
+                      <MessageSquare className="h-4 w-4 text-emerald-600" />
+                      Feedback do Cliente
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-4">
+                    <div className="pt-2 px-4">
+                      <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4 md:p-6 border border-emerald-200 shadow-inner">
+                        <p className="text-emerald-900 leading-relaxed whitespace-pre-line text-sm md:text-base m-0">
+                          {serviceSheet.client_feedback}
+                        </p>
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              )}
+            </Accordion>
           </div>
 
           {/* Right Column - Sidebar Information */}
-          <div className="space-y-8">
-            {/* Client Information */}
-            <Card className="overflow-hidden border-0 shadow-lg bg-card/50 backdrop-blur">
-              <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
-                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                  <div className="h-2 w-2 rounded-full bg-green-500 shadow-sm"></div>
-                  Informações do Cliente
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 md:p-6 space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    <Building2 className="h-3 w-3" />
-                    Empresa
+          <div className="space-y-6">
+            <Accordion type="multiple" defaultValue={["client", "timeline"]} className="space-y-4">
+              {/* Client Information */}
+              <AccordionItem value="client" className="border rounded-lg px-4 bg-card/50 backdrop-blur">
+                <AccordionTrigger className="hover:no-underline py-4">
+                  <div className="flex items-center gap-2 text-base md:text-lg font-semibold">
+                    <div className="h-2 w-2 rounded-full bg-green-500 shadow-sm"></div>
+                    Informações do Cliente
                   </div>
-                  <p className="font-semibold text-sm md:text-base text-foreground break-words">
-                    {serviceSheet.projects?.company || 'N/A'}
-                  </p>
-                </div>
-                
-                <Separator />
-                
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    <User className="h-3 w-3" />
-                    Pessoa de Contato
-                  </div>
-                  <p className="font-semibold text-sm md:text-base text-foreground">
-                    {serviceSheet.client_contact_name}
-                  </p>
-                </div>
-                
-                <Separator />
-                
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    <Mail className="h-3 w-3" />
-                    Email de Contato
-                  </div>
-                  <p className="font-medium text-xs md:text-sm text-foreground break-all bg-muted/50 px-2 py-1 rounded-lg">
-                    {serviceSheet.client_contact_email}
-                  </p>
-                </div>
-                
-                {serviceSheet.client_contact_phone && (
-                  <>
-                    <Separator />
+                </AccordionTrigger>
+                <AccordionContent className="pb-4">
+                  <div className="pt-2 px-2 space-y-4">
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        <Phone className="h-3 w-3" />
-                        Telefone
+                        <Building2 className="h-3 w-3" />
+                        Empresa
                       </div>
-                      <p className="font-medium text-xs md:text-sm text-foreground bg-muted/50 px-2 py-1 rounded-lg">
-                        {serviceSheet.client_contact_phone}
+                      <p className="font-semibold text-sm md:text-base text-foreground break-words">
+                        {serviceSheet.projects?.company || 'N/A'}
                       </p>
                     </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
 
-            {/* Timeline & Metadata */}
-            <Card className="overflow-hidden border-0 shadow-lg bg-gradient-to-br from-muted/20 to-muted/40 backdrop-blur">
-              <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 border-b">
-                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                  <Clock className="h-4 w-4 text-slate-600" />
-                  Histórico da Ficha
-                </CardTitle>
-                <CardDescription className="text-xs md:text-sm">
-                  Cronologia de eventos importantes
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-4 md:p-6">
-                <div className="space-y-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 shadow-sm"></div>
-                    <div className="flex-1 space-y-1">
-                      <p className="font-semibold text-sm text-foreground">Ficha criada</p>
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(serviceSheet.created_at), "dd/MM/yyyy 'às' HH:mm")}
+                    <Separator />
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        <User className="h-3 w-3" />
+                        Pessoa de Contato
+                      </div>
+                      <p className="font-semibold text-sm md:text-base text-foreground">
+                        {serviceSheet.client_contact_name}
                       </p>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        <Mail className="h-3 w-3" />
+                        Email de Contato
+                      </div>
+                      <p className="font-medium text-xs md:text-sm text-foreground break-all bg-muted/50 px-2 py-1 rounded-lg">
+                        {serviceSheet.client_contact_email}
+                      </p>
+                    </div>
+
+                    {serviceSheet.client_contact_phone && (
+                      <>
+                        <Separator />
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                            <Phone className="h-3 w-3" />
+                            Telefone
+                          </div>
+                          <p className="font-medium text-xs md:text-sm text-foreground bg-muted/50 px-2 py-1 rounded-lg">
+                            {serviceSheet.client_contact_phone}
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+
+              {/* Timeline & Metadata */}
+              <AccordionItem value="timeline" className="border rounded-lg px-4 bg-gradient-to-br from-muted/20 to-muted/40 backdrop-blur">
+                <AccordionTrigger className="hover:no-underline py-4">
+                  <div className="flex items-center gap-2 text-base md:text-lg font-semibold">
+                    <Clock className="h-4 w-4 text-slate-600" />
+                    Histórico da Ficha
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="pb-4">
+                  <div className="pt-2 px-2">
+                    <div className="space-y-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 shadow-sm"></div>
+                        <div className="flex-1 space-y-1">
+                          <p className="font-semibold text-sm text-foreground">Ficha criada</p>
+                          <p className="text-xs md:text-sm text-muted-foreground">
+                            {format(new Date(serviceSheet.created_at), "dd/MM/yyyy 'às' HH:mm")}
+                          </p>
+                        </div>
+                      </div>
+
+                      {serviceSheet.updated_at !== serviceSheet.created_at && (
+                        <div className="flex items-start gap-3">
+                          <div className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 shadow-sm"></div>
+                          <div className="flex-1 space-y-1">
+                            <p className="font-semibold text-sm text-foreground">Última atualização</p>
+                            <p className="text-xs md:text-sm text-muted-foreground">
+                              {format(new Date(serviceSheet.updated_at), "dd/MM/yyyy 'às' HH:mm")}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {serviceSheet.approved_at && (
+                        <div className="flex items-start gap-3">
+                          <div className={cn(
+                            "w-2 h-2 rounded-full mt-1.5 shadow-sm",
+                            serviceSheet.status === 'approved' ? 'bg-emerald-500' : 'bg-red-500'
+                          )}></div>
+                          <div className="flex-1 space-y-1">
+                            <p className="font-semibold text-sm text-foreground">
+                              {serviceSheet.status === 'approved' ? 'Aprovada pelo cliente' : 'Rejeitada pelo cliente'}
+                            </p>
+                            <p className="text-xs md:text-sm text-muted-foreground">
+                              {format(new Date(serviceSheet.approved_at), "dd/MM/yyyy 'às' HH:mm")}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  
-                  {serviceSheet.updated_at !== serviceSheet.created_at && (
-                    <div className="flex items-start gap-3">
-                      <div className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 shadow-sm"></div>
-                      <div className="flex-1 space-y-1">
-                        <p className="font-semibold text-sm text-foreground">Última atualização</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(new Date(serviceSheet.updated_at), "dd/MM/yyyy 'às' HH:mm")}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {serviceSheet.approved_at && (
-                    <div className="flex items-start gap-3">
-                      <div className={cn(
-                        "w-2 h-2 rounded-full mt-1.5 shadow-sm",
-                        serviceSheet.status === 'approved' ? 'bg-emerald-500' : 'bg-red-500'
-                      )}></div>
-                      <div className="flex-1 space-y-1">
-                        <p className="font-semibold text-sm text-foreground">
-                          {serviceSheet.status === 'approved' ? 'Aprovada pelo cliente' : 'Rejeitada pelo cliente'}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(new Date(serviceSheet.approved_at), "dd/MM/yyyy 'às' HH:mm")}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           </div>
         </div>
       </div>

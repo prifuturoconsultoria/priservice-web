@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { getAllProjects } from "@/lib/supabase";
+import { getAllProjects } from "@/lib/service-sheets-api";
 import { getUser, getUserProfile } from "@/lib/auth";
 import { redirect } from 'next/navigation';
 import { ProjectsClient } from "./projects-client";

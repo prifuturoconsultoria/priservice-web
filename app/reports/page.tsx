@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { getAllServiceSheets } from "@/lib/supabase"
+import { getAllServiceSheets } from "@/lib/service-sheets-api"
 import { getUser, getUserProfile } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { format } from "date-fns"
@@ -12,7 +12,8 @@ export default async function ReportsPage() {
   }
 
   const profile = await getUserProfile()
-  const serviceSheets = await getAllServiceSheets()
+  const result = await getAllServiceSheets()
+  const serviceSheets = result.success ? result.data || [] : []
 
   return (
     <div className="flex flex-col gap-4">

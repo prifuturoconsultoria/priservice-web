@@ -4,49 +4,36 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { Download } from "lucide-react"
+import type { ServiceSheet } from "@/types/service-sheet"
+import { exportServiceSheetsToExcel } from "@/lib/excel-export"
 
 interface ReportsClientProps {
-  serviceSheets: any[]
+  serviceSheets: ServiceSheet[]
 }
 
 export function ReportsClient({ serviceSheets }: ReportsClientProps) {
-  const generateCsv = (data: any[]) => {
-    if (data.length === 0) return ""
-
-    const headers = Object.keys(data[0]).join(",")
-    const rows = data
-      .map((row) =>
-        Object.values(row)
-          .map((value) => {
-            if (typeof value === "string" && value.includes(",")) {
-              return `"${value}"` // Enclose in quotes if value contains comma
-            }
-            return value
-          })
-          .join(","),
-      )
-      .join("\n")
-
-    return `${headers}\n${rows}`
-  }
-
   const handleDownload = () => {
-    const csv = generateCsv(serviceSheets)
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
-    const link = document.createElement("a")
-    link.href = URL.createObjectURL(blob)
-    link.setAttribute("download", `service_sheets_report_${format(new Date(), "yyyyMMdd")}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    exportServiceSheetsToExcel(serviceSheets)
   }
+
+  // Get date display for multi-line sheets
+  const getDateDisplay = (sheet: ServiceSheet): string => {
+    if (!sheet.lines || sheet.lines.length === 0) return "N/A";
+
+    if (sheet.lines.length === 1) {
+      return format(new Date(sheet.lines[0].serviceDate), "dd/MM/yyyy");
+    }
+
+    // Multi-day sheet: show date range
+    return `${format(new Date(sheet.lines[0].serviceDate), "dd/MM")} - ${format(new Date(sheet.lines[sheet.lines.length - 1].serviceDate), "dd/MM/yy")}`;
+  };
 
   return (
     <>
       <div className="flex items-center justify-between mb-4">
         <div></div>
         <Button onClick={handleDownload} disabled={serviceSheets.length === 0}>
-          <Download className="mr-2 h-4 w-4" /> Baixar CSV
+          <Download className="mr-2 h-4 w-4" /> Baixar Excel
         </Button>
       </div>
 
@@ -76,6 +63,9 @@ export function ReportsClient({ serviceSheets }: ReportsClientProps) {
                       Data do Serviço
                     </th>
                     <th scope="col" className="px-6 py-3">
+                      Total Horas
+                    </th>
+                    <th scope="col" className="px-6 py-3">
                       Status
                     </th>
                     <th scope="col" className="px-6 py-3">
@@ -87,14 +77,15 @@ export function ReportsClient({ serviceSheets }: ReportsClientProps) {
                   {serviceSheets.map((sheet) => (
                     <tr key={sheet.id} className="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
                       <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
-                        {sheet.projects?.name || 'N/A'}
+                        {sheet.project?.name || 'N/A'}
                       </td>
-                      <td className="px-6 py-4">{sheet.profiles?.full_name || 'N/A'}</td>
-                      <td className="px-6 py-4">{sheet.projects?.company || 'N/A'}</td>
-                      <td className="px-6 py-4">{format(new Date(sheet.service_date), "dd/MM/yyyy")}</td>
+                      <td className="px-6 py-4">{sheet.createdBy?.fullName || 'N/A'}</td>
+                      <td className="px-6 py-4">{sheet.project?.company || 'N/A'}</td>
+                      <td className="px-6 py-4">{getDateDisplay(sheet)}</td>
+                      <td className="px-6 py-4">{sheet.totalHours?.toFixed(1)}h</td>
                       <td className="px-6 py-4 capitalize">{sheet.status}</td>
                       <td className="px-6 py-4">
-                        {sheet.approved_at ? format(new Date(sheet.approved_at), "dd/MM/yyyy HH:mm") : "N/A"}
+                        {sheet.approvedAt ? format(new Date(sheet.approvedAt), "dd/MM/yyyy HH:mm") : "N/A"}
                       </td>
                     </tr>
                   ))}

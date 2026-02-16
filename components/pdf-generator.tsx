@@ -291,19 +291,19 @@ export function PDFGenerator({ serviceSheet, variant = "outline", className, siz
               <div class="grid">
                 <div class="field">
                   <div class="field-label">Nome do Projeto</div>
-                  <div class="field-value">${serviceSheet.projects?.name || 'N/A'}</div>
+                  <div class="field-value">${serviceSheet.project?.name || 'N/A'}</div>
                 </div>
                 <div class="field">
                   <div class="field-label">Empresa Cliente</div>
-                  <div class="field-value">${serviceSheet.projects?.company || 'N/A'}</div>
+                  <div class="field-value">${serviceSheet.project?.company || 'N/A'}</div>
                 </div>
                 <div class="field">
                   <div class="field-label">Responsável Cliente</div>
-                  <div class="field-value">${serviceSheet.projects?.client_responsible || 'N/A'}</div>
+                  <div class="field-value">${serviceSheet.project?.clientResponsible || 'N/A'}</div>
                 </div>
                 <div class="field">
                   <div class="field-label">Responsável Parceiro</div>
-                  <div class="field-value">${serviceSheet.projects?.partner_responsible || 'N/A'}</div>
+                  <div class="field-value">${serviceSheet.project?.partnerResponsible || 'N/A'}</div>
                 </div>
                 ${serviceSheet.subject ? `
                 <div class="field grid-full">
@@ -318,43 +318,62 @@ export function PDFGenerator({ serviceSheet, variant = "outline", className, siz
               <div class="grid">
                 <div class="field">
                   <div class="field-label">Técnico Responsável</div>
-                  <div class="field-value">${serviceSheet.profiles?.full_name || 'N/A'}</div>
+                  <div class="field-value">${serviceSheet.createdBy?.fullName || 'N/A'}</div>
                 </div>
                 <div class="field">
-                  <div class="field-label">Data da Intervenção</div>
-                  <div class="field-value">${new Date(serviceSheet.service_date).toLocaleDateString('pt-BR')}</div>
+                  <div class="field-label">Total de Horas</div>
+                  <div class="field-value">${serviceSheet.totalHours?.toFixed(1) || '0'}h (${serviceSheet.lines?.length || 0} ${serviceSheet.lines?.length === 1 ? 'dia' : 'dias'})</div>
                 </div>
-                <div class="field">
-                  <div class="field-label">Horário de Início</div>
-                  <div class="field-value">${serviceSheet.start_time}</div>
-                </div>
-                <div class="field">
-                  <div class="field-label">Horário de Conclusão</div>
-                  <div class="field-value">${serviceSheet.end_time}</div>
-                </div>
-                ${serviceSheet.approved_at ? `
+                ${serviceSheet.approvedAt ? `
                 <div class="field">
                   <div class="field-label">Data de ${serviceSheet.status === 'approved' ? 'Aprovação' : 'Processamento'}</div>
-                  <div class="field-value">${new Date(serviceSheet.approved_at).toLocaleDateString('pt-BR')} às ${new Date(serviceSheet.approved_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}</div>
+                  <div class="field-value">${new Date(serviceSheet.approvedAt).toLocaleDateString('pt-BR')} às ${new Date(serviceSheet.approvedAt).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}</div>
                 </div>` : ''}
               </div>
             </div>
+
+            ${serviceSheet.lines && serviceSheet.lines.length > 0 ? `
+            <div class="section">
+              <div class="section-title">Dias de Trabalho</div>
+              <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                <thead>
+                  <tr style="background-color: #f3f4f6; border-bottom: 2px solid #e5e7eb;">
+                    <th style="padding: 8px; text-align: left; font-size: 11px; color: #6b7280;">Data</th>
+                    <th style="padding: 8px; text-align: left; font-size: 11px; color: #6b7280;">Início</th>
+                    <th style="padding: 8px; text-align: left; font-size: 11px; color: #6b7280;">Fim</th>
+                    <th style="padding: 8px; text-align: left; font-size: 11px; color: #6b7280;">Horas</th>
+                    <th style="padding: 8px; text-align: left; font-size: 11px; color: #6b7280;">Descrição</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${serviceSheet.lines.map((line: any) => `
+                    <tr style="border-bottom: 1px solid #e5e7eb;">
+                      <td style="padding: 8px; font-size: 13px;">${new Date(line.serviceDate).toLocaleDateString('pt-BR')}</td>
+                      <td style="padding: 8px; font-size: 13px;">${line.startTime}</td>
+                      <td style="padding: 8px; font-size: 13px;">${line.endTime}</td>
+                      <td style="padding: 8px; font-size: 13px;">${line.hours?.toFixed(1) || '0'}h</td>
+                      <td style="padding: 8px; font-size: 13px; color: #6b7280;">${line.description || '-'}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>` : ''}
 
             <div class="section">
               <div class="section-title">Informações de Contato</div>
               <div class="grid">
                 <div class="field">
                   <div class="field-label">Pessoa de Contato</div>
-                  <div class="field-value">${serviceSheet.client_contact_name}</div>
+                  <div class="field-value">${serviceSheet.clientContactName}</div>
                 </div>
                 <div class="field">
                   <div class="field-label">Email</div>
-                  <div class="field-value">${serviceSheet.client_contact_email}</div>
+                  <div class="field-value">${serviceSheet.clientContactEmail}</div>
                 </div>
-                ${serviceSheet.client_contact_phone ? `
+                ${serviceSheet.clientContactPhone ? `
                 <div class="field">
                   <div class="field-label">Telefone</div>
-                  <div class="field-value">${serviceSheet.client_contact_phone}</div>
+                  <div class="field-value">${serviceSheet.clientContactPhone}</div>
                 </div>` : ''}
               </div>
             </div>
@@ -362,15 +381,15 @@ export function PDFGenerator({ serviceSheet, variant = "outline", className, siz
             <div class="section">
               <div class="section-title">Atividades Realizadas</div>
               <div class="activity-content">
-                ${serviceSheet.activity_description}
+                ${serviceSheet.activityDescription}
               </div>
             </div>
 
-            ${serviceSheet.client_feedback ? `
+            ${serviceSheet.clientFeedback ? `
             <div class="section">
               <div class="section-title">Observações do Cliente</div>
               <div class="activity-content">
-                ${serviceSheet.client_feedback.replace(/\n/g, '<br>')}
+                ${serviceSheet.clientFeedback.replace(/\n/g, '<br>')}
               </div>
             </div>` : ''}
 

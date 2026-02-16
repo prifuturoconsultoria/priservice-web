@@ -14,32 +14,55 @@ import { AppLayoutClient } from '@/components/app-layout-client'
 import { useEffect, useState } from 'react'
 
 let msalInstance: PublicClientApplication | null = null
+let initializationPromise: Promise<void> | null = null
 
 export function MsalProviderWrapper({ children }: { children: React.ReactNode }) {
   const [instance, setInstance] = useState<PublicClientApplication | null>(null)
+  const [isInitializing, setIsInitializing] = useState(true)
 
   useEffect(() => {
-    // Initialize MSAL instance only once
-    if (!msalInstance) {
-      msalInstance = new PublicClientApplication(msalConfig)
+    const initializeMsal = async () => {
+      try {
+        // Initialize MSAL instance only once
+        if (!msalInstance) {
+          msalInstance = new PublicClientApplication(msalConfig)
 
-      // Handle redirect promise
-      msalInstance.handleRedirectPromise().then((response) => {
-        if (response) {
-          console.log('[MSAL] Redirect successful:', response.account?.username)
+          // CRITICAL: Initialize MSAL before using it
+          console.log('[MSAL] Initializing...')
+          await msalInstance.initialize()
+          console.log('[MSAL] Initialized successfully')
+
+          // Handle redirect promise after initialization
+          const response = await msalInstance.handleRedirectPromise()
+          if (response) {
+            console.log('[MSAL] Redirect successful:', response.account?.username)
+          }
+        } else if (!initializationPromise) {
+          // If instance exists but not initialized, wait for initialization
+          console.log('[MSAL] Waiting for existing initialization...')
         }
-      }).catch((error) => {
-        console.error('[MSAL] Redirect error:', error)
-      })
+
+        setInstance(msalInstance)
+        setIsInitializing(false)
+      } catch (error) {
+        console.error('[MSAL] Initialization error:', error)
+        setIsInitializing(false)
+      }
     }
 
-    setInstance(msalInstance)
+    // Store initialization promise to prevent race conditions
+    if (!initializationPromise) {
+      initializationPromise = initializeMsal()
+    }
   }, [])
 
-  if (!instance) {
+  if (!instance || isInitializing) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="text-sm text-muted-foreground">A inicializar autenticação...</p>
+        </div>
       </div>
     )
   }
