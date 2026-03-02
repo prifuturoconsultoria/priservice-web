@@ -57,9 +57,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true)
 
+      // Generate a unique request ID to prevent duplicate processing
+      const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
       const response = await fetch(`${BACKEND_URL}/api/auth/azure-login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': requestId,
+        },
         body: JSON.stringify({ authorizationCode }),
       })
 
