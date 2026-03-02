@@ -64,7 +64,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
 
       if (!response.ok) {
-        throw new Error('Backend authentication failed')
+        // Check if authorization code expired (401 from backend usually means code expired)
+        if (response.status === 401 || response.status === 400) {
+          throw new Error(
+            'Código de autorização expirou. Por favor, tente fazer login novamente.'
+          )
+        }
+        throw new Error('Falha na autenticação com o servidor')
       }
 
       const data = await response.json()
@@ -89,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
 
       if (!syncResponse.ok) {
-        throw new Error('Failed to sync authentication tokens')
+        throw new Error('Falha ao sincronizar tokens de autenticação')
       }
 
       setIsLoading(false)
