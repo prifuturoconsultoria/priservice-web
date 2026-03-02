@@ -226,8 +226,6 @@ export async function getServiceSheetByToken(
 
     return { success: true, data: normalizeServiceSheet(result) }
   } catch (error) {
-    console.error('[getServiceSheetByToken] Error:', error)
-
     if (error instanceof ApiError) {
       if (error.status === 404) {
         return { success: false, error: 'Token inválido ou ficha não encontrada' }
@@ -427,7 +425,6 @@ export async function getProjectHoursInfo(projectId: string): Promise<{
       projectName: result.projectName || result.name || ''
     }
   } catch (error) {
-    console.error('[getProjectHoursInfo] Error:', error)
     return null
   }
 }
@@ -439,7 +436,6 @@ export async function getProjectById(id: string): Promise<any | null> {
   try {
     return await apiRequest<any>(`/api/projects/${id}`, { method: 'GET' })
   } catch (error) {
-    console.error('[getProjectById] Error:', error)
     return null
   }
 }
@@ -461,7 +457,6 @@ export async function createProject(formData: any): Promise<{ success: boolean; 
     })
     return { success: true, data }
   } catch (error: any) {
-    console.error('[createProject] Error:', error)
     return { success: false, error: error.message || 'Failed to create project' }
   }
 }
@@ -483,7 +478,6 @@ export async function updateProject(id: string, formData: any): Promise<{ succes
     })
     return { success: true, data }
   } catch (error: any) {
-    console.error('[updateProject] Error:', error)
     return { success: false, error: error.message || 'Failed to update project' }
   }
 }
@@ -496,7 +490,6 @@ export async function deleteProject(id: string): Promise<{ success: boolean; err
     await apiRequest<void>(`/api/projects/${id}`, { method: 'DELETE' })
     return { success: true }
   } catch (error: any) {
-    console.error('[deleteProject] Error:', error)
     return { success: false, error: error.message || 'Failed to delete project' }
   }
 }
@@ -516,7 +509,6 @@ export async function getAllUsers(): Promise<any[]> {
       role: u.role ? u.role.toLowerCase() : 'technician',
     }))
   } catch (error) {
-    console.error('[getAllUsers] Error:', error)
     return []
   }
 }
@@ -602,7 +594,6 @@ export async function getUserProfileFromApi(): Promise<any | null> {
   try {
     return await apiRequest<any>('/api/profile', { method: 'GET' })
   } catch (error) {
-    console.error('[getUserProfileFromApi] Error:', error)
     return null
   }
 }

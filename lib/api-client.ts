@@ -27,24 +27,15 @@ const USER_KEY = 'auth_user'
 let isRefreshing = false
 let refreshSubscribers: ((token: string) => void)[] = []
 
-/**
- * Subscribe to token refresh events
- */
 function subscribeTokenRefresh(callback: (token: string) => void) {
   refreshSubscribers.push(callback)
 }
 
-/**
- * Notify all subscribers when token is refreshed
- */
 function onTokenRefreshed(newToken: string) {
   refreshSubscribers.forEach((callback) => callback(newToken))
   refreshSubscribers = []
 }
 
-/**
- * Get stored tokens from sessionStorage
- */
 export function getStoredTokens(): { accessToken: string; refreshToken: string } | null {
   if (typeof window === 'undefined') return null
 
@@ -58,9 +49,6 @@ export function getStoredTokens(): { accessToken: string; refreshToken: string }
   }
 }
 
-/**
- * Store tokens in sessionStorage
- */
 export function storeTokens(tokens: { accessToken: string; refreshToken: string; user?: User }): void {
   if (typeof window === 'undefined') return
 
@@ -77,9 +65,6 @@ export function storeTokens(tokens: { accessToken: string; refreshToken: string;
   }
 }
 
-/**
- * Get stored user from sessionStorage
- */
 export function getStoredUser(): User | null {
   if (typeof window === 'undefined') return null
 
@@ -93,9 +78,6 @@ export function getStoredUser(): User | null {
   }
 }
 
-/**
- * Clear all stored authentication data
- */
 export function clearTokens(): void {
   if (typeof window === 'undefined') return
 
@@ -103,11 +85,6 @@ export function clearTokens(): void {
   sessionStorage.removeItem(USER_KEY)
 }
 
-/**
- * Exchange authorization code for access tokens
- * @param authorizationCode The authorization code from Microsoft OAuth callback
- * @returns Token response from backend
- */
 export async function exchangeCodeForTokens(authorizationCode: string): Promise<TokenResponse> {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
 
@@ -115,34 +92,20 @@ export async function exchangeCodeForTokens(authorizationCode: string): Promise<
     throw new Error('Backend URL not configured')
   }
 
-  console.log('Exchanging code with backend:', backendUrl)
-
   const response = await fetch(`${backendUrl}/api/auth/azure-login`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ authorizationCode }),
   })
 
-  console.log('Backend response status:', response.status)
-
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'Falha na autenticação' }))
-    console.error('Backend error:', error)
     throw new Error(error.message || 'Erro ao trocar código de autorização')
   }
 
-  const data: TokenResponse = await response.json()
-  console.log('Token exchange successful, user:', data.user?.email)
-  return data
+  return await response.json()
 }
 
-/**
- * Refresh the access token using refresh token
- * @param refreshToken The refresh token
- * @returns New token response
- */
 export async function refreshAccessToken(refreshToken: string): Promise<TokenResponse> {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL
 
@@ -152,9 +115,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<TokenRes
 
   const response = await fetch(`${backendUrl}/api/auth/refresh`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refreshToken }),
   })
 
@@ -162,16 +123,9 @@ export async function refreshAccessToken(refreshToken: string): Promise<TokenRes
     throw new Error('Falha ao renovar token')
   }
 
-  const data: TokenResponse = await response.json()
-  return data
+  return await response.json()
 }
 
-/**
- * Make an authenticated API request with automatic token refresh
- * @param endpoint API endpoint (e.g., '/api/users')
- * @param options Fetch options
- * @returns Response data
- */
 export async function apiRequest<T>(
   endpoint: string,
   options?: RequestInit
@@ -197,7 +151,6 @@ export async function apiRequest<T>(
     },
   })
 
-  // Handle 401 - token expired, try to refresh
   if (response.status === 401 && !isRefreshing) {
     isRefreshing = true
 
@@ -205,20 +158,16 @@ export async function apiRequest<T>(
       const newTokens = await refreshAccessToken(tokens.refreshToken)
       storeTokens(newTokens)
 
-      // Sync to cookies for server-side access
       await syncTokensToCookies(newTokens.accessToken, newTokens.refreshToken)
 
       isRefreshing = false
       onTokenRefreshed(newTokens.accessToken)
 
-      // Retry original request with new token
       return apiRequest<T>(endpoint, options)
-    } catch (error) {
-      // Refresh failed - logout user
+    } catch {
       isRefreshing = false
       clearTokens()
 
-      // Redirect to login
       if (typeof window !== 'undefined') {
         window.location.href = '/login'
       }
@@ -235,9 +184,6 @@ export async function apiRequest<T>(
   return response.json()
 }
 
-/**
- * Sync tokens to HTTP-only cookies for server-side access
- */
 async function syncTokensToCookies(accessToken: string, refreshToken: string): Promise<void> {
   try {
     await fetch('/api/sync-tokens', {
@@ -245,8 +191,7 @@ async function syncTokensToCookies(accessToken: string, refreshToken: string): P
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ accessToken, refreshToken }),
     })
-  } catch (error) {
-    console.error('Failed to sync tokens to cookies:', error)
-    // Don't throw - this is a non-critical operation
+  } catch {
+    // Non-critical — cookie sync failure doesn't block the user
   }
 }

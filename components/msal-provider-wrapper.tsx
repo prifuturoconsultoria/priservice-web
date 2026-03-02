@@ -28,24 +28,17 @@ export function MsalProviderWrapper({ children }: { children: React.ReactNode })
           msalInstance = new PublicClientApplication(msalConfig)
 
           // CRITICAL: Initialize MSAL before using it
-          console.log('[MSAL] Initializing...')
           await msalInstance.initialize()
-          console.log('[MSAL] Initialized successfully')
 
           // Handle redirect promise after initialization
-          const response = await msalInstance.handleRedirectPromise()
-          if (response) {
-            console.log('[MSAL] Redirect successful:', response.account?.username)
-          }
+          await msalInstance.handleRedirectPromise()
         } else if (!initializationPromise) {
           // If instance exists but not initialized, wait for initialization
-          console.log('[MSAL] Waiting for existing initialization...')
         }
 
         setInstance(msalInstance)
         setIsInitializing(false)
-      } catch (error) {
-        console.error('[MSAL] Initialization error:', error)
+      } catch {
         setIsInitializing(false)
       }
     }

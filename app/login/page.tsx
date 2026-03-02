@@ -44,8 +44,7 @@ export default function LoginPage() {
       setIsRedirecting(true)
       const loginUrl = getAzureLoginUrl()
       window.location.href = loginUrl
-    } catch (error) {
-      console.error('Error generating login URL:', error)
+    } catch {
       alert('Erro ao iniciar login.')
       setIsRedirecting(false)
     }

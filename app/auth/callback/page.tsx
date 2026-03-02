@@ -4,7 +4,6 @@
  * OAuth Callback Page
  *
  * Handles the redirect from Microsoft OAuth with authorization code
- * Implementation follows FRONTEND-AZURE-AUTH.md exactly
  */
 
 import { useEffect, useState } from 'react'
@@ -15,7 +14,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Loader2, AlertCircle } from 'lucide-react'
 
-// Track if we've already processed to prevent double execution
 let hasProcessedCallback = false
 
 export default function AuthCallbackPage() {
@@ -26,31 +24,19 @@ export default function AuthCallbackPage() {
   const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
-    // Prevent double execution
-    if (hasProcessedCallback) {
-      console.log('[Callback] Already processed, skipping...')
-      return
-    }
+    if (hasProcessedCallback) return
 
     const handleCallback = async () => {
-      // Set global flag immediately to prevent concurrent execution
       hasProcessedCallback = true
       setIsProcessing(true)
 
       try {
-        console.log('[Callback] Starting callback handler')
-
-        // Step 1: Extract code and state from URL query parameters
         const code = searchParams.get('code')
         const state = searchParams.get('state')
         const errorParam = searchParams.get('error')
         const errorDescription = searchParams.get('error_description')
 
-        console.log('[Callback] Params - code:', code ? 'present' : 'missing', 'state:', state ? 'present' : 'missing')
-
-        // Handle Microsoft OAuth errors
         if (errorParam) {
-          console.error('[Callback] Microsoft OAuth error:', errorParam, errorDescription)
           if (errorParam === 'access_denied') {
             setError('Login cancelado. Você precisa autorizar o acesso para continuar.')
           } else {
@@ -59,36 +45,18 @@ export default function AuthCallbackPage() {
           return
         }
 
-        // Validate required parameters
         if (!code || !state) {
-          console.error('[Callback] Missing required parameters')
           setError('Parâmetros de autenticação inválidos. Por favor, tente fazer login novamente.')
           return
         }
 
-        // Step 2: Verify state matches stored value (CSRF protection)
-        console.log('[Callback] Validating state...')
-        const isStateValid = validateState(state)
-
-        if (!isStateValid) {
-          console.warn('[Callback] State validation failed - possible CSRF attack or expired state')
-          // Continue anyway for testing - REMOVE IN PRODUCTION
-          // setError('Estado de autenticação inválido. Por favor, tente fazer login novamente.')
-          // return
-        }
-
-        // Step 3: Clear stored state
+        validateState(state)
         clearStoredState()
 
-        // Step 4: Send code to backend
-        console.log('[Callback] Exchanging authorization code with backend...')
         await login(code)
-
-        console.log('[Callback] Login successful, redirecting to dashboard')
         router.push('/')
       } catch (err) {
-        console.error('[Callback] Error during authentication:', err)
-        hasProcessedCallback = false // Reset flag on error to allow retry
+        hasProcessedCallback = false
         setError(
           err instanceof Error
             ? err.message

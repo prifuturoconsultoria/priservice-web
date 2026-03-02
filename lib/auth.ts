@@ -32,7 +32,6 @@ async function verifyJWT(token: string): Promise<User | null> {
     const secret = process.env.JWT_SECRET
 
     if (!secret) {
-      console.warn('[verifyJWT] JWT_SECRET not configured - using insecure decode fallback')
       return decodeJWTUnsafe(token)
     }
 
@@ -48,14 +47,13 @@ async function verifyJWT(token: string): Promise<User | null> {
       fullName: (payload.fullName as string) || (payload.name as string) || (payload.sub as string)?.split('@')[0] || 'User',
       role: ((payload.role as string)?.toLowerCase() || 'observer') as UserRole,
     }
-  } catch (error) {
-    console.error('[verifyJWT] Token verification failed:', error)
+  } catch {
     return null
   }
 }
 
 /**
- * Decode JWT without signature verification (INSECURE - fallback only)
+ * Decode JWT without signature verification (INSECURE - dev fallback only)
  */
 function decodeJWTUnsafe(token: string): User | null {
   try {
@@ -74,8 +72,7 @@ function decodeJWTUnsafe(token: string): User | null {
       fullName: payload.fullName || payload.name || payload.sub?.split('@')[0] || 'User',
       role: (payload.role?.toLowerCase() || 'observer') as UserRole,
     }
-  } catch (error) {
-    console.error('[decodeJWTUnsafe] Error decoding token:', error)
+  } catch {
     return null
   }
 }
@@ -91,10 +88,8 @@ export const getUser = cache(async (): Promise<User | null> => {
 
     if (!accessToken) return null
 
-    const user = await verifyJWT(accessToken)
-    return user
-  } catch (error) {
-    console.error('[getUser] Error getting user:', error)
+    return await verifyJWT(accessToken)
+  } catch {
     return null
   }
 })
@@ -118,7 +113,6 @@ export async function requireAuth(): Promise<User> {
 
 /**
  * Get user profile — uses JWT data directly (fast, no API call needed)
- * The JWT already contains role, email, and fullName
  */
 export async function getUserProfile() {
   const user = await getUser()

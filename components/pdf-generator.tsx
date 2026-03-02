@@ -432,7 +432,6 @@ export function PDFGenerator({ serviceSheet, variant = "outline", className, siz
       }
       
     } catch (error) {
-      console.error('Error generating PDF:', error)
       alert('Erro ao gerar relatório PDF')
     } finally {
       setIsGenerating(false)

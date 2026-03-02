@@ -217,8 +217,8 @@ export default function ServiceSheetForm({ initialData, isEditing = false, initi
           // Open all accordions in edit mode
           setOpenAccordions(["project", "client", "days", "activities"])
         }
-      } catch (error) {
-        console.error('Error loading data:', error)
+      } catch {
+        // Data loading failed silently
       } finally {
         setIsLoadingData(false)
       }

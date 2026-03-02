@@ -22,16 +22,8 @@ export async function middleware(request: NextRequest) {
   // Get access token from cookie
   const accessToken = request.cookies.get('access_token')?.value
 
-  console.log('[Middleware]', {
-    pathname,
-    isPublicRoute,
-    hasAccessToken: !!accessToken,
-    timestamp: new Date().toISOString(),
-  })
-
   // If no token and accessing protected route, redirect to login
   if (!accessToken && !isPublicRoute) {
-    console.log('[Middleware] No access token, redirecting to login')
     const loginUrl = new URL('/login', request.url)
     return NextResponse.redirect(loginUrl)
   }
@@ -39,13 +31,11 @@ export async function middleware(request: NextRequest) {
   // If has token and accessing login page specifically, redirect to dashboard
   // Don't redirect /auth/callback or /api/sync-tokens
   if (accessToken && pathname === '/login') {
-    console.log('[Middleware] Has token on login page, redirecting to dashboard')
     const dashboardUrl = new URL('/', request.url)
     return NextResponse.redirect(dashboardUrl)
   }
 
   // Allow request to proceed
-  console.log('[Middleware] Allowing request to proceed')
   return NextResponse.next()
 }
 

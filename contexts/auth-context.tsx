@@ -28,7 +28,6 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const USER_KEY = 'auth_user'
-// TOKEN_KEY removed - tokens now stored in HTTP-only cookies only
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -42,14 +41,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (storedUser) {
       try {
         const parsed = JSON.parse(storedUser)
-        // Normalize role to lowercase (Spring Boot returns uppercase)
         if (parsed.role) {
           parsed.role = parsed.role.toLowerCase()
         }
         sessionStorage.setItem(USER_KEY, JSON.stringify(parsed))
         setUser(parsed)
-      } catch (e) {
-        console.error('[Auth] Error parsing user:', e)
+      } catch {
+        // Corrupted data — ignore
       }
     }
     setIsLoading(false)
@@ -58,7 +56,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (authorizationCode: string) => {
     try {
       setIsLoading(true)
-      console.log('[Auth] Exchanging code with backend...')
 
       const response = await fetch(`${BACKEND_URL}/api/auth/azure-login`, {
         method: 'POST',
@@ -71,9 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const data = await response.json()
-      console.log('[Auth] Backend auth successful:', data.user?.email)
 
-      // Normalize user data (role comes uppercase from Spring Boot)
       const normalizedUser: User = {
         id: data.user.id,
         email: data.user.email,
@@ -81,13 +76,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role: (data.user.role || 'technician').toLowerCase() as UserRole,
       }
 
-      // ✅ SECURITY: Store ONLY user data, NOT tokens
       sessionStorage.setItem(USER_KEY, JSON.stringify(normalizedUser))
-
       setUser(normalizedUser)
 
-      // Sync to cookies
-      console.log('[Auth] Syncing tokens to cookies...')
       const syncResponse = await fetch('/api/sync-tokens', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -98,45 +89,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
 
       if (!syncResponse.ok) {
-        console.error('[Auth] Failed to sync tokens to cookies')
         throw new Error('Failed to sync authentication tokens')
       }
 
-      console.log('[Auth] Tokens synced to cookies successfully')
       setIsLoading(false)
     } catch (error) {
       setIsLoading(false)
-      console.error('[Auth] Login error:', error)
       throw error
     }
   }, [])
 
   const logout = useCallback(async () => {
-    console.log('[Auth] Logging out...')
-
-    // Clear session storage
     sessionStorage.removeItem(USER_KEY)
     setUser(null)
 
-    // Clear HTTP-only cookies
     try {
       await fetch('/api/sync-tokens', { method: 'DELETE' })
-      console.log('[Auth] Cookies cleared successfully')
-    } catch (error) {
-      console.error('[Auth] Error clearing cookies:', error)
+    } catch {
+      // Non-critical
     }
 
-    // Use full page reload to ensure cookies are completely cleared
-    console.log('[Auth] Redirecting to login page')
     window.location.href = '/login'
   }, [])
 
   const refreshUser = useCallback(async () => {
     try {
       const response = await fetch(`${BACKEND_URL}/api/profile`, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
       })
 
@@ -150,11 +129,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         sessionStorage.setItem(USER_KEY, JSON.stringify(updatedUser))
         setUser(updatedUser)
-        console.log('[Auth] User profile refreshed:', updatedUser.email, updatedUser.role)
       }
-    } catch (e) {
-      console.error('[Auth] Error refreshing user profile:', e)
-      // Fallback to sessionStorage
+    } catch {
       const storedUser = sessionStorage.getItem(USER_KEY)
       if (storedUser) {
         try { setUser(JSON.parse(storedUser)) } catch {}

@@ -99,7 +99,7 @@ export function AdminUsersClient({ initialUsers }: { initialUsers: any[] }) {
         description: "Erro ao atualizar função do usuário",
         variant: "destructive",
       });
-      console.error("Edit role error:", error);
+
     } finally {
       setIsLoading(false);
     }
