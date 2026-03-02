@@ -2,7 +2,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { getAllServiceSheets } from "@/lib/supabase"
+import { getAllServiceSheets } from "@/lib/service-sheets-api"
 import { getUser, getUserProfile } from "@/lib/auth"
 import { format, subDays, eachDayOfInterval, parseISO } from "date-fns"
 import { redirect } from 'next/navigation'
@@ -16,7 +16,8 @@ export default async function DashboardPage() {
   }
   
   const profile = await getUserProfile()
-  const serviceSheets = await getAllServiceSheets()
+  const response = await getAllServiceSheets()
+  const serviceSheets = response.data || []
 
   // Calculate statistics
   const totalSheets = serviceSheets.length
@@ -45,7 +46,7 @@ export default async function DashboardPage() {
   const activityData = last7Days.map(day => {
     const dayStr = format(day, 'yyyy-MM-dd')
     const sheetsForDay = serviceSheets.filter(sheet => 
-      format(parseISO(sheet.created_at), 'yyyy-MM-dd') === dayStr
+      format(parseISO(sheet.createdAt), 'yyyy-MM-dd') === dayStr
     ).length
     return {
       date: format(day, 'dd/MM'),
@@ -59,7 +60,7 @@ export default async function DashboardPage() {
   for (let i = 5; i >= 0; i--) {
     const date = subDays(new Date(), i * 30)
     const monthSheets = serviceSheets.filter(sheet => {
-      const sheetDate = parseISO(sheet.created_at)
+      const sheetDate = parseISO(sheet.createdAt)
       return sheetDate >= subDays(date, 30) && sheetDate <= date
     }).length
     
@@ -70,17 +71,17 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Bem-vindo de volta, {profile?.full_name || user.user_metadata?.full_name || user.email}
+          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-gray-900 via-gray-800 to-gray-600 bg-clip-text text-transparent">Dashboard</h1>
+          <p className="text-muted-foreground mt-1">
+            Bem-vindo de volta, {profile?.fullName || profile?.full_name || user.fullName || user.email}
           </p>
         </div>
         {profile?.role !== 'observer' && (
-          <Button asChild>
+          <Button asChild className="shadow-md hover:shadow-lg transition-all">
             <Link href="/service-sheets/new">
               <FileText className="mr-2 h-4 w-4" />
               Nova Ficha
@@ -91,53 +92,61 @@ export default async function DashboardPage() {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="border-l-4 border-l-blue-500 hover:shadow-md transition-all duration-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total de Fichas</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+            <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center">
+              <FileText className="h-4 w-4 text-blue-600" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalSheets}</div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-1">
               Todas as fichas de serviço
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-amber-500 hover:shadow-md transition-all duration-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pendentes</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-600" />
+            <div className="h-8 w-8 rounded-lg bg-amber-50 flex items-center justify-center">
+              <Clock className="h-4 w-4 text-amber-600" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{pendingSheets}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold text-amber-600">{pendingSheets}</div>
+            <p className="text-xs text-muted-foreground mt-1">
               Aguardando aprovação
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-emerald-500 hover:shadow-md transition-all duration-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Aprovadas</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-600" />
+            <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+              <CheckCircle className="h-4 w-4 text-emerald-600" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{approvedSheets}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold text-emerald-600">{approvedSheets}</div>
+            <p className="text-xs text-muted-foreground mt-1">
               Aprovadas pelos clientes
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-l-4 border-l-red-500 hover:shadow-md transition-all duration-200">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Rejeitadas</CardTitle>
-            <XCircle className="h-4 w-4 text-red-600" />
+            <div className="h-8 w-8 rounded-lg bg-red-50 flex items-center justify-center">
+              <XCircle className="h-4 w-4 text-red-600" />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{rejectedSheets}</div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-1">
               Rejeitadas pelos clientes
             </p>
           </CardContent>
@@ -153,12 +162,12 @@ export default async function DashboardPage() {
         approvalRate={approvalRate}
       />
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Status Distribution */}
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 hover:shadow-md transition-all duration-200">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <PieChart className="h-5 w-5" />
+              <PieChart className="h-5 w-5 text-primary" />
               Distribuição Detalhada
             </CardTitle>
             <CardDescription>
@@ -204,10 +213,10 @@ export default async function DashboardPage() {
         </Card>
 
         {/* Performance Metrics */}
-        <Card>
+        <Card className="hover:shadow-md transition-all duration-200">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5" />
+              <BarChart3 className="h-5 w-5 text-primary" />
               Métricas
             </CardTitle>
             <CardDescription>
@@ -242,33 +251,36 @@ export default async function DashboardPage() {
       </div>
 
       {/* Recent Service Sheets */}
-      <Card>
+      <Card className="hover:shadow-md transition-all duration-200">
         <CardHeader>
-          <CardTitle>Fichas Recentes</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-primary" />
+            Fichas Recentes
+          </CardTitle>
           <CardDescription>
             Últimas fichas de serviço criadas
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {serviceSheets.slice(0, 5).map((sheet) => (
-              <div key={sheet.id} className="flex items-center justify-between p-4 border rounded-lg">
+          <div className="space-y-3">
+            {serviceSheets.slice(0, 5).map((sheet, index) => (
+              <div key={sheet.id} className={`flex items-center justify-between p-4 rounded-xl border hover:bg-muted/40 transition-colors duration-150 ${index !== Math.min(4, serviceSheets.length - 1) ? '' : ''}`}>
                 <div className="space-y-1">
-                  <p className="font-medium">{sheet.project_name}</p>
+                  <p className="font-medium">{sheet.project?.name || sheet.subject || 'N/A'}</p>
                   <p className="text-sm text-muted-foreground">
-                    {sheet.client_company} • {format(new Date(sheet.service_date), "dd/MM/yyyy")}
+                    {sheet.project?.company || 'N/A'} • {sheet.lines?.[0]?.serviceDate ? format(new Date(sheet.lines[0].serviceDate), "dd/MM/yyyy") : format(new Date(sheet.createdAt), "dd/MM/yyyy")}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                    sheet.status === 'approved' ? 'bg-green-100 text-green-800' :
-                    sheet.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                    'bg-yellow-100 text-yellow-800'
+                <div className="flex items-center gap-3">
+                  <div className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    sheet.status === 'approved' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' :
+                    sheet.status === 'rejected' ? 'bg-red-50 text-red-700 ring-1 ring-red-200' :
+                    'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
                   }`}>
-                    {sheet.status === 'pending' ? 'Pendente' : 
+                    {sheet.status === 'pending' ? 'Pendente' :
                      sheet.status === 'approved' ? 'Aprovado' : 'Rejeitado'}
                   </div>
-                  <Button asChild variant="ghost" size="sm">
+                  <Button asChild variant="ghost" size="sm" className="text-primary hover:text-primary">
                     <Link href={`/service-sheets/${sheet.id}`}>
                       Ver
                     </Link>
@@ -277,10 +289,11 @@ export default async function DashboardPage() {
               </div>
             ))}
             {serviceSheets.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                Nenhuma ficha de serviço encontrada.
+              <div className="text-center py-12 text-muted-foreground">
+                <FileText className="h-12 w-12 mx-auto mb-3 text-muted-foreground/40" />
+                <p className="font-medium">Nenhuma ficha de serviço encontrada.</p>
                 {profile?.role !== 'observer' && (
-                  <Link href="/service-sheets/new" className="text-primary hover:underline ml-1">
+                  <Link href="/service-sheets/new" className="text-primary hover:underline mt-1 inline-block text-sm">
                     Crie a primeira ficha
                   </Link>
                 )}

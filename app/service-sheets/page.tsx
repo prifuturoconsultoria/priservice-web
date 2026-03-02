@@ -1,29 +1,21 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  getAllServiceSheets,
-} from "@/lib/supabase";
-import { format } from "date-fns";
-import { Search, Filter, Calendar, Sparkles } from "lucide-react";
+import { getAllServiceSheets } from "@/lib/service-sheets-api";
 import { getUser, getUserProfile } from "@/lib/auth";
 import { redirect } from 'next/navigation';
 import { ServiceSheetsClient } from "./service-sheets-client";
 
 export default async function ServiceSheetsPage() {
-  const user = await getUser()
-  if (!user) {
-    redirect('/login')
-  }
+  // Parallel: auth + data fetch (getUser is cached, so both calls share the same JWT verification)
+  const [user, profile, response] = await Promise.all([
+    getUser(),
+    getUserProfile(),
+    getAllServiceSheets(),
+  ])
 
-  const profile = await getUserProfile()
-  const serviceSheets = await getAllServiceSheets()
+  if (!user) redirect('/login')
+
+  const serviceSheets = response.data || []
 
   return (
     <div className="flex flex-col gap-4">

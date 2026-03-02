@@ -15,9 +15,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { Send, Save, X, CheckCircle2, Circle, RotateCcw } from "lucide-react"
+import { Send, Save, X, CheckCircle2, Circle, RotateCcw, ChevronsUpDown, Check, Loader2, FolderOpen } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 // Schema for individual service line
 const lineSchema = z.object({
@@ -50,6 +53,8 @@ interface Project {
   company: string
   client_responsible: string
   partner_responsible: string
+  total_hours?: number
+  used_hours?: number
   totalHours?: number
   usedHours?: number
   availableHours?: number
@@ -58,12 +63,16 @@ interface Project {
 interface ServiceSheetFormProps {
   initialData?: any
   isEditing?: boolean
+  initialProjects?: Project[]
+  initialUser?: any
 }
 
-export default function ServiceSheetForm({ initialData, isEditing = false }: ServiceSheetFormProps) {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [isLoadingData, setIsLoadingData] = useState(true)
+export default function ServiceSheetForm({ initialData, isEditing = false, initialProjects, initialUser }: ServiceSheetFormProps) {
+  const [projects, setProjects] = useState<Project[]>(initialProjects ?? [])
+  const [currentUser, setCurrentUser] = useState<any>(initialUser ?? null)
+  const [isLoadingData, setIsLoadingData] = useState(!initialProjects)
+  const [projectComboOpen, setProjectComboOpen] = useState(false)
+  const [projectSearch, setProjectSearch] = useState("")
   const [projectHoursInfo, setProjectHoursInfo] = useState<any>(null)
   const [openAccordions, setOpenAccordions] = useState<string[]>(["project"])
   const [hasAutoOpened, setHasAutoOpened] = useState<{ [key: string]: boolean }>({
@@ -170,20 +179,20 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [projectsData, userProfile] = await Promise.all([
-          getAllProjects(),
-          getCurrentUserProfile()
-        ])
+        // Skip API calls if data was already provided via props (server-fetched)
+        if (!initialProjects) {
+          const [projectsData, userProfile] = await Promise.all([
+            getAllProjects(),
+            getCurrentUserProfile()
+          ])
 
-        // Ensure projects is always an array
-        if (Array.isArray(projectsData)) {
-          console.log('[ServiceSheetForm] Loaded', projectsData.length, 'projects successfully')
-          setProjects(projectsData)
-        } else {
-          console.error('[ServiceSheetForm] Projects is not an array:', typeof projectsData)
-          setProjects([])
+          if (Array.isArray(projectsData)) {
+            setProjects(projectsData)
+          } else {
+            setProjects([])
+          }
+          setCurrentUser(userProfile)
         }
-        setCurrentUser(userProfile)
 
         if (initialData) {
           // Transform API data to form format if editing
@@ -226,19 +235,15 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
       const selectedProject = projects.find(p => p.id === selectedProjectId)
 
       if (selectedProject) {
-        // Extract hours info directly from the project data
+        // Handle both snake_case (from server) and camelCase (from API) field names
+        const totalHours = selectedProject.totalHours ?? selectedProject.total_hours ?? 0
+        const usedHours = selectedProject.usedHours ?? selectedProject.used_hours ?? 0
+        const availableHours = selectedProject.availableHours ?? (totalHours - usedHours)
         setProjectHoursInfo({
-          totalHours: selectedProject.totalHours || 0,
-          usedHours: selectedProject.usedHours || 0,
-          availableHours: selectedProject.availableHours ||
-            ((selectedProject.totalHours || 0) - (selectedProject.usedHours || 0)),
+          totalHours,
+          usedHours,
+          availableHours,
           projectName: selectedProject.name || ''
-        })
-        console.log('[ServiceSheetForm] Project hours info:', {
-          name: selectedProject.name,
-          total: selectedProject.totalHours,
-          used: selectedProject.usedHours,
-          available: selectedProject.availableHours
         })
       } else {
         setProjectHoursInfo(null)
@@ -251,22 +256,6 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
   const { toast } = useToast()
-
-  if (isLoadingData) {
-    return (
-      <div className="w-full max-w-4xl mx-auto space-y-6">
-        <div className="text-center space-y-2">
-          <div className="h-8 bg-muted animate-pulse rounded"></div>
-          <div className="h-4 bg-muted animate-pulse rounded"></div>
-        </div>
-        <div className="space-y-4">
-          <div className="h-32 bg-muted animate-pulse rounded"></div>
-          <div className="h-32 bg-muted animate-pulse rounded"></div>
-          <div className="h-32 bg-muted animate-pulse rounded"></div>
-        </div>
-      </div>
-    )
-  }
 
   const onSubmit = async (data: FormData) => {
     startTransition(async () => {
@@ -320,10 +309,10 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-6">
-      <div className="text-center space-y-2">
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{isEditing ? 'Editar Ficha de Serviço' : 'Nova Ficha de Serviço'}</h1>
-        <p className="text-muted-foreground text-sm md:text-base">{isEditing ? 'Actualize os detalhes do serviço realizado' : 'Preencha as informações do serviço prestado'}</p>
+    <div className="w-full max-w-4xl mx-auto space-y-4">
+      <div className="flex items-center gap-3">
+        <h1 className="text-xl font-semibold tracking-tight">{isEditing ? 'Editar Ficha de Serviço' : 'Nova Ficha de Serviço'}</h1>
+        <span className="text-xs text-muted-foreground border rounded-full px-2.5 py-0.5">{isEditing ? 'Edição' : 'Novo'}</span>
       </div>
 
       <Form {...form}>
@@ -351,32 +340,105 @@ export default function ServiceSheetForm({ initialData, isEditing = false }: Ser
               <FormField
                 control={form.control}
                 name="projectId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">Projecto *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                render={({ field }) => {
+                  const filteredProjects = projects.filter(p =>
+                    `${p.name} ${p.company}`.toLowerCase().includes(projectSearch.toLowerCase())
+                  )
+                  const selectedProject = projects.find(p => p.id === field.value)
+
+                  return (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium">Projecto *</FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccione um projecto" />
-                        </SelectTrigger>
+                        <Popover open={projectComboOpen} onOpenChange={setProjectComboOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={projectComboOpen}
+                              className={cn(
+                                "w-full justify-between font-normal h-10 text-left border-input bg-background shadow-sm hover:bg-accent/50 transition-colors",
+                                !selectedProject && !isLoadingData && "text-muted-foreground"
+                              )}
+                              disabled={isLoadingData}
+                            >
+                              {isLoadingData ? (
+                                <span className="flex items-center gap-2 text-muted-foreground">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  A carregar projectos...
+                                </span>
+                              ) : selectedProject ? (
+                                <span className="flex items-center gap-2 truncate">
+                                  <FolderOpen className="h-4 w-4 shrink-0 text-blue-600" />
+                                  <span className="truncate font-medium">{selectedProject.company}</span>
+                                  <span className="text-muted-foreground text-xs truncate hidden sm:inline">· {selectedProject.name}</span>
+                                </span>
+                              ) : (
+                                "Seleccione um projecto"
+                              )}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[--radix-popover-trigger-width] p-0 shadow-lg border" align="start">
+                            <Command shouldFilter={false}>
+                              <CommandInput
+                                placeholder="Pesquisar projecto..."
+                                value={projectSearch}
+                                onValueChange={setProjectSearch}
+                              />
+                              <CommandList className="max-h-[250px]">
+                                {filteredProjects.length === 0 ? (
+                                  <CommandEmpty className="py-8 text-center">
+                                    <FolderOpen className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
+                                    <p className="text-sm text-muted-foreground">Nenhum projecto encontrado.</p>
+                                  </CommandEmpty>
+                                ) : (
+                                  <CommandGroup>
+                                    {filteredProjects.map((project) => {
+                                      const isSelected = field.value === project.id
+                                      return (
+                                        <CommandItem
+                                          key={project.id}
+                                          value={project.id}
+                                          onSelect={() => {
+                                            field.onChange(project.id)
+                                            setProjectComboOpen(false)
+                                            setProjectSearch("")
+                                          }}
+                                          className={cn(
+                                            "flex items-center gap-3 px-3 py-2.5 cursor-pointer",
+                                            isSelected && "bg-blue-50/80 text-blue-900"
+                                          )}
+                                        >
+                                          <div className={cn(
+                                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold",
+                                            isSelected
+                                              ? "bg-blue-600 text-white"
+                                              : "bg-muted text-muted-foreground"
+                                          )}>
+                                            {project.company.charAt(0).toUpperCase()}
+                                          </div>
+                                          <div className="flex flex-col min-w-0 flex-1">
+                                            <span className={cn("text-sm truncate", isSelected ? "font-semibold" : "font-medium")}>{project.company}</span>
+                                            <span className="text-xs text-muted-foreground truncate">{project.name}</span>
+                                          </div>
+                                          {isSelected && (
+                                            <Check className="h-4 w-4 shrink-0 text-blue-600" />
+                                          )}
+                                        </CommandItem>
+                                      )
+                                    })}
+                                  </CommandGroup>
+                                )}
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                       </FormControl>
-                      <SelectContent>
-                        {projects && projects.length > 0 ? (
-                          projects.map((project) => (
-                            <SelectItem key={project.id} value={project.id}>
-                              {project.name} - {project.company}
-                            </SelectItem>
-                          ))
-                        ) : (
-                          <div className="px-2 py-6 text-center text-sm text-muted-foreground">
-                            {isLoadingData ? 'A carregar projectos...' : 'Nenhum projecto disponível'}
-                          </div>
-                        )}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                      <FormMessage />
+                    </FormItem>
+                  )
+                }}
               />
 
               {projectHoursInfo && (

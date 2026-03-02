@@ -6,17 +6,15 @@ import { redirect } from 'next/navigation';
 import { ProjectsClient } from "./projects-client";
 
 export default async function ProjectsPage() {
-  const user = await getUser()
-  if (!user) {
-    redirect('/login')
-  }
+  // Parallel: auth + data fetch
+  const [user, profile, projects] = await Promise.all([
+    getUser(),
+    getUserProfile(),
+    getAllProjects(),
+  ])
 
-  const profile = await getUserProfile()
-  if (profile?.role === 'observer') {
-    redirect('/')
-  }
-  
-  const projects = await getAllProjects()
+  if (!user) redirect('/login')
+  if (profile?.role === 'observer') redirect('/')
 
   return (
     <div className="flex flex-col gap-4">

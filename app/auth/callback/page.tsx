@@ -84,12 +84,8 @@ export default function AuthCallbackPage() {
         console.log('[Callback] Exchanging authorization code with backend...')
         await login(code)
 
-        console.log('[Callback] Login successful, cookies should now be set')
-
-        // Use window.location.href for a full page reload with cookies
-        // This ensures cookies are properly sent on the next request
-        console.log('[Callback] Redirecting to dashboard with full page reload')
-        window.location.href = '/'
+        console.log('[Callback] Login successful, redirecting to dashboard')
+        router.push('/')
       } catch (err) {
         console.error('[Callback] Error during authentication:', err)
         hasProcessedCallback = false // Reset flag on error to allow retry

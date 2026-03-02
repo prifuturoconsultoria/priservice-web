@@ -80,11 +80,11 @@ export interface UpdateServiceSheetDto {
   lines?: Omit<ServiceSheetLine, "id" | "hours">[] // Include lineNumber, backend calculates hours
 }
 
-// DTO for approval/rejection
+// DTO for approval/rejection (matches Spring Boot ApproveServiceSheetRequest)
 export interface ApprovalDto {
-  approverEmail: string // Required for email validation
-  feedback?: string // Optional client feedback
+  confirmationEmail: string // Required for email validation
   approved: boolean // true = approve, false = reject
+  rejectionReason?: string // Optional reason when rejecting
 }
 
 // Filters for listing service sheets

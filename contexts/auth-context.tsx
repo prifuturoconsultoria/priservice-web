@@ -36,12 +36,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
-  // Initialize from sessionStorage
+  // Initialize from sessionStorage (no background API call — JWT is the source of truth)
   useEffect(() => {
     const storedUser = sessionStorage.getItem(USER_KEY)
     if (storedUser) {
       try {
-        setUser(JSON.parse(storedUser))
+        const parsed = JSON.parse(storedUser)
+        // Normalize role to lowercase (Spring Boot returns uppercase)
+        if (parsed.role) {
+          parsed.role = parsed.role.toLowerCase()
+        }
+        sessionStorage.setItem(USER_KEY, JSON.stringify(parsed))
+        setUser(parsed)
       } catch (e) {
         console.error('[Auth] Error parsing user:', e)
       }
@@ -67,11 +73,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await response.json()
       console.log('[Auth] Backend auth successful:', data.user?.email)
 
-      // ✅ SECURITY: Store ONLY user data, NOT tokens
-      // Tokens are stored in HTTP-only cookies only (XSS protection)
-      sessionStorage.setItem(USER_KEY, JSON.stringify(data.user))
+      // Normalize user data (role comes uppercase from Spring Boot)
+      const normalizedUser: User = {
+        id: data.user.id,
+        email: data.user.email,
+        fullName: data.user.fullName || data.user.full_name || '',
+        role: (data.user.role || 'technician').toLowerCase() as UserRole,
+      }
 
-      setUser(data.user)
+      // ✅ SECURITY: Store ONLY user data, NOT tokens
+      sessionStorage.setItem(USER_KEY, JSON.stringify(normalizedUser))
+
+      setUser(normalizedUser)
 
       // Sync to cookies
       console.log('[Auth] Syncing tokens to cookies...')
@@ -119,12 +132,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const refreshUser = useCallback(async () => {
-    const storedUser = sessionStorage.getItem(USER_KEY)
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser))
-      } catch (e) {
-        console.error('[Auth] Error parsing user:', e)
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/profile`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      })
+
+      if (response.ok) {
+        const profileData = await response.json()
+        const updatedUser: User = {
+          id: profileData.id,
+          email: profileData.email,
+          fullName: profileData.fullName || profileData.full_name,
+          role: (profileData.role || 'technician').toLowerCase() as UserRole,
+        }
+        sessionStorage.setItem(USER_KEY, JSON.stringify(updatedUser))
+        setUser(updatedUser)
+        console.log('[Auth] User profile refreshed:', updatedUser.email, updatedUser.role)
+      }
+    } catch (e) {
+      console.error('[Auth] Error refreshing user profile:', e)
+      // Fallback to sessionStorage
+      const storedUser = sessionStorage.getItem(USER_KEY)
+      if (storedUser) {
+        try { setUser(JSON.parse(storedUser)) } catch {}
       }
     }
   }, [])

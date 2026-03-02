@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getProjectById } from "@/lib/supabase";
+import { getProjectById } from "@/lib/service-sheets-api";
 import ProjectForm from "@/components/project-form";
 import { getUser, getUserProfile } from "@/lib/auth";
 import { redirect } from 'next/navigation';

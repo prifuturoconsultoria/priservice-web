@@ -4,12 +4,13 @@
  * Server-Side Authentication Functions
  *
  * Validates JWT tokens and manages user sessions
+ * Uses React cache() to deduplicate JWT verification within a single request
  */
 
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
-import { createClient } from '@/utils/supabase/server'
 import { jwtVerify } from 'jose'
+import { cache } from 'react'
 
 export type UserRole = 'admin' | 'technician' | 'observer'
 
@@ -22,55 +23,31 @@ export interface User {
 
 /**
  * Verify JWT signature and extract user info
- * ✅ SECURITY: Verifies token signature to prevent forgery
- * @param token JWT access token
- * @returns Verified user data or null if invalid
  */
 async function verifyJWT(token: string): Promise<User | null> {
   try {
-    // First, decode header to check algorithm
     const parts = token.split('.')
-    if (parts.length !== 3) {
-      console.error('[verifyJWT] Invalid JWT format')
-      return null
-    }
+    if (parts.length !== 3) return null
 
-    const header = JSON.parse(
-      Buffer.from(parts[0].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()
-    )
-
-    console.log('[verifyJWT] JWT algorithm:', header.alg)
-
-    // Get JWT secret from environment
     const secret = process.env.JWT_SECRET
 
     if (!secret) {
-      console.error('[verifyJWT] JWT_SECRET not configured - using insecure decode fallback')
-      // Fallback to unsafe decode (development only)
+      console.warn('[verifyJWT] JWT_SECRET not configured - using insecure decode fallback')
       return decodeJWTUnsafe(token)
     }
 
-    // Create secret key for verification
     const secretKey = new TextEncoder().encode(secret)
 
-    // ✅ Verify signature and decode (prevents token forgery)
-    // Allow common HMAC algorithms (HS256, HS384, HS512)
     const { payload } = await jwtVerify(token, secretKey, {
       algorithms: ['HS256', 'HS384', 'HS512'],
     })
 
-    console.log('[verifyJWT] Token verified successfully:', payload.sub)
-
-    // Extract user info from JWT claims
-    // Backend JWT structure: { role, userId, sub (email), iat, exp }
-    const user: User = {
-      id: 0, // Backend uses UUID in userId field, frontend expects number (not used)
-      email: (payload.sub as string) || '', // sub contains the email
+    return {
+      id: 0,
+      email: (payload.sub as string) || '',
       fullName: (payload.fullName as string) || (payload.name as string) || (payload.sub as string)?.split('@')[0] || 'User',
-      role: ((payload.role as string)?.toLowerCase() || 'observer') as UserRole, // Convert TECHNICIAN -> technician
+      role: ((payload.role as string)?.toLowerCase() || 'observer') as UserRole,
     }
-
-    return user
   } catch (error) {
     console.error('[verifyJWT] Token verification failed:', error)
     return null
@@ -79,41 +56,24 @@ async function verifyJWT(token: string): Promise<User | null> {
 
 /**
  * Decode JWT without signature verification (INSECURE - fallback only)
- * ⚠️ WARNING: Use only when JWT_SECRET is not configured
- * @param token JWT access token
- * @returns Decoded user data or null if invalid
  */
 function decodeJWTUnsafe(token: string): User | null {
   try {
-    console.warn('[decodeJWTUnsafe] ⚠️ WARNING: Using insecure JWT decode without signature verification!')
-
-    // JWT format: header.payload.signature
     const parts = token.split('.')
-    if (parts.length !== 3) {
-      console.error('[decodeJWTUnsafe] Invalid JWT format')
-      return null
-    }
+    if (parts.length !== 3) return null
 
-    // Decode payload (base64url)
     const payload = JSON.parse(
       Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()
     )
 
-    // Check expiration
-    if (payload.exp && payload.exp * 1000 < Date.now()) {
-      console.error('[decodeJWTUnsafe] Token expired')
-      return null
-    }
+    if (payload.exp && payload.exp * 1000 < Date.now()) return null
 
-    // Extract user info from JWT claims
-    const user: User = {
+    return {
       id: 0,
       email: payload.sub || '',
       fullName: payload.fullName || payload.name || payload.sub?.split('@')[0] || 'User',
       role: (payload.role?.toLowerCase() || 'observer') as UserRole,
     }
-
-    return user
   } catch (error) {
     console.error('[decodeJWTUnsafe] Error decoding token:', error)
     return null
@@ -122,105 +82,48 @@ function decodeJWTUnsafe(token: string): User | null {
 
 /**
  * Get current user from JWT token in cookie
- * @returns User object or null if not authenticated
+ * Cached per request — JWT verification only happens once per page load
  */
-export async function getUser(): Promise<User | null> {
+export const getUser = cache(async (): Promise<User | null> => {
   try {
     const cookieStore = await cookies()
     const accessToken = cookieStore.get('access_token')?.value
 
-    console.log('[getUser] Checking auth, has token:', !!accessToken)
+    if (!accessToken) return null
 
-    if (!accessToken) {
-      console.log('[getUser] No access token found in cookies')
-      return null
-    }
-
-    // ✅ SECURITY: Verify JWT signature and decode
     const user = await verifyJWT(accessToken)
-
-    if (!user) {
-      console.error('[getUser] Failed to verify JWT or token expired')
-      return null
-    }
-
-    console.log('[getUser] User verified from JWT:', user.email)
     return user
   } catch (error) {
     console.error('[getUser] Error getting user:', error)
     return null
   }
-}
+})
+
+/**
+ * Get the raw access token from cookies (cached per request)
+ */
+export const getAccessToken = cache(async (): Promise<string | null> => {
+  const cookieStore = await cookies()
+  return cookieStore.get('access_token')?.value || null
+})
 
 /**
  * Require authentication, redirect to login if not authenticated
- * @returns User object
- * @throws Redirects to /login if not authenticated
  */
 export async function requireAuth(): Promise<User> {
   const user = await getUser()
-
-  if (!user) {
-    redirect('/login')
-  }
-
+  if (!user) redirect('/login')
   return user
 }
 
 /**
- * Get user profile from Supabase database
- * Auto-creates profile if doesn't exist (first Azure AD login)
- * @returns User profile from database or null
+ * Get user profile — uses JWT data directly (fast, no API call needed)
+ * The JWT already contains role, email, and fullName
  */
 export async function getUserProfile() {
   const user = await getUser()
   if (!user) return null
-
-  const supabase = await createClient()
-
-  // Find profile by email (Azure AD users don't have Supabase auth ID)
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('email', user.email)
-    .maybeSingle()
-
-  // Create profile if doesn't exist (first login from Azure AD)
-  if (!profile) {
-    try {
-      const { data: newProfile } = await supabase
-        .from('profiles')
-        .insert({
-          email: user.email,
-          full_name: user.fullName,
-          role: user.role,
-          azure_user_id: user.id, // Store backend user ID
-        })
-        .select()
-        .single()
-
-      return newProfile
-    } catch (error) {
-      console.error('Error creating profile:', error)
-      return null
-    }
-  }
-
-  // Update azure_user_id if not set (migration case)
-  if (!profile.azure_user_id) {
-    try {
-      await supabase
-        .from('profiles')
-        .update({ azure_user_id: user.id })
-        .eq('id', profile.id)
-
-      profile.azure_user_id = user.id
-    } catch (error) {
-      console.error('Error updating azure_user_id:', error)
-    }
-  }
-
-  return profile
+  return { id: user.id, email: user.email, fullName: user.fullName, role: user.role }
 }
 
 /**
@@ -228,9 +131,7 @@ export async function getUserProfile() {
  */
 export async function signOut() {
   const cookieStore = await cookies()
-
   cookieStore.delete('access_token')
   cookieStore.delete('refresh_token')
-
   redirect('/login')
 }

@@ -22,10 +22,10 @@ export function DashboardCharts({
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       {/* Pie Chart - Status Distribution */}
-      <Card className="col-span-1">
+      <Card className="col-span-1 hover:shadow-md transition-all duration-200">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <div className="h-2.5 w-2.5 rounded-full bg-blue-500 shadow-sm shadow-blue-200"></div>
             Status Overview
           </CardTitle>
           <CardDescription>Distribuição atual por status</CardDescription>
@@ -72,9 +72,9 @@ export function DashboardCharts({
       </Card>
 
       {/* Bar Chart - Last 7 Days Activity */}
-      <Card className="col-span-1">
+      <Card className="col-span-1 hover:shadow-md transition-all duration-200">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
             <Activity className="h-4 w-4 text-blue-600" />
             Atividade Semanal
           </CardTitle>
@@ -112,9 +112,9 @@ export function DashboardCharts({
       </Card>
 
       {/* Line Chart - Monthly Trend */}
-      <Card className="col-span-1">
+      <Card className="col-span-1 hover:shadow-md transition-all duration-200">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
             <TrendingUp className="h-4 w-4 text-green-600" />
             Tendência Mensal
           </CardTitle>
@@ -155,9 +155,9 @@ export function DashboardCharts({
       </Card>
 
       {/* Performance Summary */}
-      <Card className="col-span-full lg:col-span-3">
+      <Card className="col-span-full lg:col-span-3 hover:shadow-md transition-all duration-200">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
             <BarChart3 className="h-5 w-5 text-purple-600" />
             Resumo de Performance
           </CardTitle>
@@ -166,40 +166,40 @@ export function DashboardCharts({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="text-center p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="text-center p-5 bg-gradient-to-br from-blue-50 to-blue-100/60 rounded-xl border border-blue-100 hover:shadow-md hover:border-blue-200 transition-all duration-200">
               <div className="text-3xl font-bold text-blue-700">{totalSheets}</div>
-              <div className="text-sm text-blue-600 mt-1">Total de Fichas</div>
-              <div className="text-xs text-blue-500 mt-2">
-                {totalSheets > 0 ? '📈 Sistema ativo' : '⚡ Pronto para uso'}
+              <div className="text-sm font-medium text-blue-600 mt-1">Total de Fichas</div>
+              <div className="text-xs text-blue-400 mt-2">
+                {totalSheets > 0 ? 'Sistema ativo' : 'Pronto para uso'}
               </div>
             </div>
-            
-            <div className="text-center p-6 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200">
-              <div className="text-3xl font-bold text-green-700">{approvalRate.toFixed(1)}%</div>
-              <div className="text-sm text-green-600 mt-1">Taxa de Aprovação</div>
-              <div className="text-xs text-green-500 mt-2">
-                {approvalRate > 80 ? '🔥 Excelente' : approvalRate > 60 ? '✅ Boa' : '📊 Regular'}
+
+            <div className="text-center p-5 bg-gradient-to-br from-emerald-50 to-emerald-100/60 rounded-xl border border-emerald-100 hover:shadow-md hover:border-emerald-200 transition-all duration-200">
+              <div className="text-3xl font-bold text-emerald-700">{approvalRate.toFixed(1)}%</div>
+              <div className="text-sm font-medium text-emerald-600 mt-1">Taxa de Aprovação</div>
+              <div className="text-xs text-emerald-400 mt-2">
+                {approvalRate > 80 ? 'Excelente' : approvalRate > 60 ? 'Boa' : 'Regular'}
               </div>
             </div>
-            
-            <div className="text-center p-6 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl border border-purple-200">
+
+            <div className="text-center p-5 bg-gradient-to-br from-purple-50 to-purple-100/60 rounded-xl border border-purple-100 hover:shadow-md hover:border-purple-200 transition-all duration-200">
               <div className="text-3xl font-bold text-purple-700">
                 {activityData.reduce((sum, day) => sum + day.sheets, 0)}
               </div>
-              <div className="text-sm text-purple-600 mt-1">Esta Semana</div>
-              <div className="text-xs text-purple-500 mt-2">
-                {activityData.reduce((sum, day) => sum + day.sheets, 0) > 5 ? '🚀 Alta atividade' : '📈 Em crescimento'}
+              <div className="text-sm font-medium text-purple-600 mt-1">Esta Semana</div>
+              <div className="text-xs text-purple-400 mt-2">
+                {activityData.reduce((sum, day) => sum + day.sheets, 0) > 5 ? 'Alta atividade' : 'Em crescimento'}
               </div>
             </div>
-            
-            <div className="text-center p-6 bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl border border-orange-200">
+
+            <div className="text-center p-5 bg-gradient-to-br from-orange-50 to-orange-100/60 rounded-xl border border-orange-100 hover:shadow-md hover:border-orange-200 transition-all duration-200">
               <div className="text-3xl font-bold text-orange-700">
                 {monthlyData.length > 0 ? Math.max(...monthlyData.map(m => m.sheets)) : 0}
               </div>
-              <div className="text-sm text-orange-600 mt-1">Pico Mensal</div>
-              <div className="text-xs text-orange-500 mt-2">
-                📊 Melhor mês
+              <div className="text-sm font-medium text-orange-600 mt-1">Pico Mensal</div>
+              <div className="text-xs text-orange-400 mt-2">
+                Melhor mês
               </div>
             </div>
           </div>

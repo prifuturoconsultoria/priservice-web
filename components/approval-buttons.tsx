@@ -4,20 +4,21 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { approveServiceSheet } from "@/lib/supabase"
+import { approveServiceSheet } from "@/lib/service-sheets-api"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { useToast } from "@/hooks/use-toast"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { CheckCircle, AlertTriangle } from "lucide-react"
+import { CheckCircle, XCircle, AlertTriangle } from "lucide-react"
 
-const feedbackSchema = z.object({
-  feedback: z.string().max(500, "Feedback não pode exceder 500 caracteres").optional(),
+const approvalSchema = z.object({
+  email: z.string().email("Email inválido").min(1, "Email é obrigatório"),
+  rejectionReason: z.string().max(500, "Motivo não pode exceder 500 caracteres").optional(),
 })
 
-type FeedbackData = z.infer<typeof feedbackSchema>
+type ApprovalFormData = z.infer<typeof approvalSchema>
 
 export function ApprovalButtons({ token }: { token: string }) {
   const [isApproving, setIsApproving] = useState(false)
@@ -25,18 +26,19 @@ export function ApprovalButtons({ token }: { token: string }) {
   const [isCompleted, setIsCompleted] = useState(false)
   const [completedAction, setCompletedAction] = useState<'approved' | 'rejected' | null>(null)
   const { toast } = useToast()
-  
-  const form = useForm<FeedbackData>({
-    resolver: zodResolver(feedbackSchema),
+
+  const form = useForm<ApprovalFormData>({
+    resolver: zodResolver(approvalSchema),
     defaultValues: {
-      feedback: "",
+      email: "",
+      rejectionReason: "",
     },
   })
 
-  const handleApprove = async (data: FeedbackData) => {
+  const handleApprove = async (data: ApprovalFormData) => {
     setIsApproving(true)
     try {
-      const result = await approveServiceSheet(token, data.feedback || "", true)
+      const result = await approveServiceSheet(token, data.email, true)
       if (result.success) {
         setIsCompleted(true)
         setCompletedAction('approved')
@@ -47,7 +49,7 @@ export function ApprovalButtons({ token }: { token: string }) {
       } else {
         toast({
           title: "Erro",
-          description: `Erro ao aprovar: ${result.error}`,
+          description: result.error || "Erro ao aprovar",
           variant: "destructive",
         })
       }
@@ -62,10 +64,10 @@ export function ApprovalButtons({ token }: { token: string }) {
     }
   }
 
-  const handleReject = async (data: FeedbackData) => {
+  const handleReject = async (data: ApprovalFormData) => {
     setIsRejecting(true)
     try {
-      const result = await approveServiceSheet(token, data.feedback || "", false)
+      const result = await approveServiceSheet(token, data.email, false, data.rejectionReason)
       if (result.success) {
         setIsCompleted(true)
         setCompletedAction('rejected')
@@ -76,7 +78,7 @@ export function ApprovalButtons({ token }: { token: string }) {
       } else {
         toast({
           title: "Erro",
-          description: `Erro ao rejeitar: ${result.error}`,
+          description: result.error || "Erro ao rejeitar",
           variant: "destructive",
         })
       }
@@ -93,28 +95,23 @@ export function ApprovalButtons({ token }: { token: string }) {
 
   if (isCompleted) {
     return (
-      <Card className="w-full bg-green-50 border-green-200">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-2">
-            <CheckCircle className="h-12 w-12 text-green-600" />
-          </div>
-          <CardTitle className="text-green-800">
-            {completedAction === 'approved' ? 'Serviço Aprovado!' : 'Feedback Enviado!'}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-center">
-          <p className="text-green-700 mb-4 text-sm md:text-base">
-            Obrigado, seu feedback foi coletado. Já pode fechar essa página.
+      <div className="text-center space-y-4 py-4">
+        <div className="flex justify-center">
+          {completedAction === 'approved' ? (
+            <CheckCircle className="h-10 w-10 text-green-600" />
+          ) : (
+            <XCircle className="h-10 w-10 text-red-500" />
+          )}
+        </div>
+        <div className="space-y-1">
+          <h3 className="text-lg font-semibold text-gray-900">
+            {completedAction === 'approved' ? 'Serviço Aprovado!' : 'Serviço Rejeitado'}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Obrigado. Já pode fechar essa página.
           </p>
-          <Button 
-            onClick={() => window.close()} 
-            variant="outline"
-            className="border-green-300 text-green-700 hover:bg-green-100 text-sm md:text-base h-10 md:h-11"
-          >
-            Fechar Página
-          </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     )
   }
 
@@ -123,15 +120,33 @@ export function ApprovalButtons({ token }: { token: string }) {
       <div className="space-y-4">
         <FormField
           control={form.control}
-          name="feedback"
+          name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-sm md:text-base">Feedback do Cliente (Opcional)</FormLabel>
+              <FormLabel className="text-sm">Seu Email</FormLabel>
+              <FormControl>
+                <Input
+                  type="email"
+                  placeholder="Confirme o seu email..."
+                  className="text-sm"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="rejectionReason"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-sm">Comentário (Opcional)</FormLabel>
               <FormControl>
                 <Textarea
-                  placeholder="Adicione feedback para o técnico..."
+                  placeholder="Adicione um comentário..."
                   rows={3}
-                  className="text-sm md:text-base"
+                  className="text-sm"
                   {...field}
                 />
               </FormControl>
@@ -140,22 +155,22 @@ export function ApprovalButtons({ token }: { token: string }) {
           )}
         />
         <div className="flex flex-col sm:flex-row gap-2">
-          <Button 
+          <Button
             type="button"
-            onClick={form.handleSubmit(handleApprove)} 
-            disabled={isApproving || isRejecting} 
-            className="flex-1 text-sm md:text-base h-10 md:h-11"
+            onClick={form.handleSubmit(handleApprove)}
+            disabled={isApproving || isRejecting}
+            className="flex-1 text-sm h-10"
           >
             {isApproving ? "Aprovando..." : "Aprovar"}
           </Button>
-          
+
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button 
+              <Button
                 type="button"
-                disabled={isApproving || isRejecting} 
-                variant="outline" 
-                className="flex-1 bg-transparent text-sm md:text-base h-10 md:h-11"
+                disabled={isApproving || isRejecting}
+                variant="outline"
+                className="flex-1 text-sm h-10"
               >
                 {isRejecting ? "Rejeitando..." : "Rejeitar"}
               </Button>
@@ -163,18 +178,22 @@ export function ApprovalButtons({ token }: { token: string }) {
             <AlertDialogContent>
               <AlertDialogHeader>
                 <div className="flex items-center gap-3">
-                  <AlertTriangle className="h-6 w-6 text-orange-600" />
+                  <AlertTriangle className="h-5 w-5 text-orange-500" />
                   <AlertDialogTitle>Confirmar Rejeição</AlertDialogTitle>
                 </div>
-                <AlertDialogDescription className="text-base">
-                  Tem certeza de que deseja <strong>rejeitar</strong> esta ficha de serviço? 
-                  Esta ação irá notificar o técnico sobre a rejeição.
-                  {form.watch("feedback") && (
-                    <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-md">
-                      <p className="text-sm font-medium text-orange-800">Seu feedback será incluído:</p>
-                      <p className="text-sm text-orange-700 italic mt-1">"{form.watch("feedback")}"</p>
-                    </div>
-                  )}
+                <AlertDialogDescription asChild>
+                  <div className="space-y-3">
+                    <p>
+                      Tem certeza de que deseja rejeitar esta ficha de serviço?
+                      O técnico será notificado.
+                    </p>
+                    {form.watch("rejectionReason") && (
+                      <div className="p-3 bg-gray-50 border rounded-md">
+                        <p className="text-xs font-medium text-gray-600">Seu comentário:</p>
+                        <p className="text-sm text-gray-800 italic mt-1">&ldquo;{form.watch("rejectionReason")}&rdquo;</p>
+                      </div>
+                    )}
+                  </div>
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

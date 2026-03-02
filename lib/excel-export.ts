@@ -31,7 +31,7 @@ export function exportServiceSheetsToExcel(data: ServiceSheet[], filename?: stri
           'Actividade': sheet.subject || 'N/A',
           'Hora de Início': line.startTime,
           'Hora Fim': line.endTime,
-          'Somatório': line.hours ? `${line.hours.toFixed(1)}h` : 'N/A',
+          'Somatório': (line.hours || (line as any).calculatedHours) ? `${((line.hours || (line as any).calculatedHours) as number).toFixed(1)}h` : 'N/A',
           'Descrição': line.description || '',
           'Estado': getStatusLabel(sheet.status)
         });

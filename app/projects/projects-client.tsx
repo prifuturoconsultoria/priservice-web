@@ -40,9 +40,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { getAllProjects } from "@/lib/service-sheets-api";
-import { deleteProject } from "@/lib/supabase";
+import { deleteProject } from "@/lib/service-sheets-api";
 import { format } from "date-fns";
-import { MoreHorizontal, Eye, Edit, Trash2, Search, X, Sparkles } from "lucide-react";
+import { MoreHorizontal, Eye, Edit, Trash2, Search, X, Sparkles, FolderOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ProjectsClientProps {
@@ -64,10 +64,10 @@ export function ProjectsClient({ initialData }: ProjectsClientProps) {
     if (searchTerm) {
       filtered = filtered.filter(
         (project) =>
-          project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          project.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          project.client_responsible.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          project.partner_responsible.toLowerCase().includes(searchTerm.toLowerCase())
+          project.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          project.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (project.clientResponsible || project.client_responsible || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (project.partnerResponsible || project.partner_responsible || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -113,12 +113,12 @@ export function ProjectsClient({ initialData }: ProjectsClientProps) {
   return (
     <>
       {/* Filters Section */}
-      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+      <Card className="bg-gradient-to-r from-slate-50/80 to-blue-50/50 border-slate-200">
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="flex items-center gap-2 text-blue-900">
-                <Search className="h-5 w-5" />
+              <CardTitle className="flex items-center gap-2 text-slate-800">
+                <Search className="h-5 w-5 text-primary" />
                 Busca
               </CardTitle>
             </div>
@@ -173,24 +173,33 @@ export function ProjectsClient({ initialData }: ProjectsClientProps) {
       </Card>
 
       {/* Results Section */}
-      <Card>
+      <Card className="hover:shadow-sm transition-shadow duration-200">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Projetos</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <FolderOpen className="h-5 w-5 text-primary" />
+                Projetos
+              </CardTitle>
             </div>
-            <div className="text-sm text-muted-foreground">
-              Página {currentPage} de {Math.ceil(filteredProjects.length / itemsPerPage)}
+            <div className="text-sm text-muted-foreground bg-muted/50 px-3 py-1 rounded-full">
+              Página {currentPage} de {Math.max(1, Math.ceil(filteredProjects.length / itemsPerPage))}
             </div>
           </div>
         </CardHeader>
         <CardContent>
           {filteredProjects.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">
-              {projects.length === 0
-                ? "Nenhum projeto encontrado. Crie um para começar!"
-                : "Nenhum resultado encontrado para os filtros aplicados."}
-            </p>
+            <div className="text-center py-16">
+              <FolderOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
+              <p className="text-muted-foreground font-medium">
+                {projects.length === 0
+                  ? "Nenhum projeto encontrado."
+                  : "Nenhum resultado encontrado para os filtros aplicados."}
+              </p>
+              {projects.length === 0 && (
+                <p className="text-sm text-muted-foreground/70 mt-1">Crie um para começar!</p>
+              )}
+            </div>
           ) : (
             <>
               <ScrollArea className="h-[600px] w-full rounded-md border">
@@ -211,19 +220,18 @@ export function ProjectsClient({ initialData }: ProjectsClientProps) {
                       <TableRow key={project.id}>
                         <TableCell className="font-medium">{project.name}</TableCell>
                         <TableCell>{project.company}</TableCell>
-                        <TableCell>{project.client_responsible}</TableCell>
-                        <TableCell>{project.partner_responsible}</TableCell>
+                        <TableCell>{project.clientResponsible || project.client_responsible || '-'}</TableCell>
+                        <TableCell>{project.partnerResponsible || project.partner_responsible || '-'}</TableCell>
                         <TableCell className="text-center">
-                          <span className="font-semibold text-green-600">
-                            {project.total_hours ? `${project.total_hours.toFixed(2)}h` : '0h'}
-                          </span>
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold">
+                            {(project.totalHours || project.total_hours) ? `${Number(project.totalHours || project.total_hours).toFixed(1)}h` : '0h'}
+                          </Badge>
                         </TableCell>
                         <TableCell className="text-center">
-                          <span className="font-semibold text-red-600">
-                            {project.used_hours ? `${project.used_hours.toFixed(2)}h` : '0h'}
-                          </span>
+                          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 font-semibold">
+                            {(project.usedHours || project.used_hours) ? `${Number(project.usedHours || project.used_hours).toFixed(1)}h` : '0h'}
+                          </Badge>
                         </TableCell>
-                        <TableCell>{format(new Date(project.created_at), "dd/MM/yyyy")}</TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -285,9 +293,9 @@ export function ProjectsClient({ initialData }: ProjectsClientProps) {
               </ScrollArea>
 
               {totalPages > 1 && (
-                <div className="flex items-center justify-between space-x-2 py-4">
+                <div className="flex items-center justify-between space-x-2 pt-6 pb-2">
                   <div className="text-sm text-muted-foreground">
-                    Mostrando {startIndex + 1} a {Math.min(endIndex, filteredProjects.length)} de {filteredProjects.length} resultados
+                    Mostrando <span className="font-medium text-foreground">{startIndex + 1}</span> a <span className="font-medium text-foreground">{Math.min(endIndex, filteredProjects.length)}</span> de <span className="font-medium text-foreground">{filteredProjects.length}</span> resultados
                   </div>
                   <div className="flex space-x-2">
                     <Button

@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getProjectById } from "@/lib/supabase";
+import { getProjectById } from "@/lib/service-sheets-api";
 import { format } from "date-fns";
 import Link from "next/link";
 import { ArrowLeft, Edit, Building, User, Users, Clock } from "lucide-react";
@@ -99,14 +99,14 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
                 <User className="h-4 w-4" />
                 Responsável Cliente
               </div>
-              <p className="text-base font-semibold">{project.client_responsible}</p>
+              <p className="text-base font-semibold">{project.clientResponsible || project.client_responsible || '-'}</p>
             </div>
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                 <Users className="h-4 w-4" />
                 Responsável Parceiro
               </div>
-              <p className="text-base font-semibold">{project.partner_responsible}</p>
+              <p className="text-base font-semibold">{project.partnerResponsible || project.partner_responsible || '-'}</p>
             </div>
           </div>
         </CardContent>
@@ -129,7 +129,7 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
                 Horas Totais
               </div>
               <p className="text-2xl font-bold text-green-600">
-                {project.total_hours != null ? `${project.total_hours.toFixed(2)}h` : '0h'}
+                {(project.totalHours ?? project.total_hours) != null ? `${Number(project.totalHours ?? project.total_hours).toFixed(1)}h` : '0h'}
               </p>
             </div>
             <div className="space-y-2">
@@ -138,7 +138,7 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
                 Horas Usadas
               </div>
               <p className="text-2xl font-bold text-red-600">
-                {project.used_hours != null ? `${project.used_hours.toFixed(2)}h` : '0h'}
+                {(project.usedHours ?? project.used_hours) != null ? `${Number(project.usedHours ?? project.used_hours).toFixed(1)}h` : '0h'}
               </p>
             </div>
             <div className="space-y-2">
@@ -147,28 +147,34 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
                 Horas Disponíveis
               </div>
               <p className="text-2xl font-bold text-blue-600">
-                {project.total_hours != null && project.used_hours != null
-                  ? `${(project.total_hours - project.used_hours).toFixed(2)}h`
-                  : '0h'}
+                {(() => {
+                  const total = Number(project.totalHours ?? project.total_hours ?? 0)
+                  const used = Number(project.usedHours ?? project.used_hours ?? 0)
+                  return `${(total - used).toFixed(1)}h`
+                })()}
               </p>
             </div>
           </div>
-          {project.total_hours != null && project.total_hours > 0 && (
-            <div className="mt-6">
-              <div className="flex items-center justify-between text-sm mb-2">
-                <span className="text-muted-foreground">Progresso</span>
-                <span className="font-medium">
-                  {project.total_hours > 0 ? ((project.used_hours || 0) / project.total_hours * 100).toFixed(1) : '0'}%
-                </span>
+          {(() => {
+            const total = Number(project.totalHours ?? project.total_hours ?? 0)
+            const used = Number(project.usedHours ?? project.used_hours ?? 0)
+            return total > 0 ? (
+              <div className="mt-6">
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="text-muted-foreground">Progresso</span>
+                  <span className="font-medium">
+                    {(used / total * 100).toFixed(1)}%
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-green-500 to-red-500 transition-all duration-300"
+                    style={{ width: `${Math.min((used / total) * 100, 100)}%` }}
+                  />
+                </div>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-green-500 to-red-500 transition-all duration-300"
-                  style={{ width: `${project.total_hours > 0 ? Math.min(((project.used_hours || 0) / project.total_hours) * 100, 100) : 0}%` }}
-                />
-              </div>
-            </div>
-          )}
+            ) : null
+          })()}
         </CardContent>
       </Card>
 
@@ -186,13 +192,17 @@ export default async function ProjectDetailPage({ params }: ProjectDetailPagePro
             <div className="space-y-2">
               <div className="text-sm font-medium text-muted-foreground">Criado em</div>
               <p className="text-base font-semibold">
-                {format(new Date(project.created_at), "dd/MM/yyyy 'às' HH:mm")}
+                {(project.createdAt || project.created_at)
+                  ? format(new Date(project.createdAt || project.created_at), "dd/MM/yyyy 'às' HH:mm")
+                  : '-'}
               </p>
             </div>
             <div className="space-y-2">
               <div className="text-sm font-medium text-muted-foreground">Última atualização</div>
               <p className="text-base font-semibold">
-                {format(new Date(project.updated_at), "dd/MM/yyyy 'às' HH:mm")}
+                {(project.updatedAt || project.updated_at)
+                  ? format(new Date(project.updatedAt || project.updated_at), "dd/MM/yyyy 'às' HH:mm")
+                  : '-'}
               </p>
             </div>
           </div>
