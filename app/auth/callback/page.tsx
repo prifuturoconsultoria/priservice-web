@@ -53,8 +53,24 @@ export default function AuthCallbackPage() {
         validateState(state)
         clearStoredState()
 
-        await login(code)
-        router.push('/')
+        // Attempt login once, with retry logic
+        let lastError: Error | null = null
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            await login(code)
+            router.push('/')
+            return
+          } catch (err) {
+            lastError = err instanceof Error ? err : new Error(String(err))
+            if (attempt < 3) {
+              // Wait 1 second before retry
+              await new Promise(resolve => setTimeout(resolve, 1000))
+            }
+          }
+        }
+
+        // All retries failed
+        throw lastError || new Error('Login failed after 3 attempts')
       } catch (err) {
         hasProcessedCallback = false
         setError(
