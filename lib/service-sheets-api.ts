@@ -170,7 +170,7 @@ export async function getAllServiceSheets(
 
     const params = new URLSearchParams()
     if (filters?.page !== undefined) params.append('page', filters.page.toString())
-    if (filters?.size !== undefined) params.append('size', filters.size.toString())
+    params.append('size', (filters?.size ?? 500).toString())
     if (filters?.status) params.append('status', filters.status)
     if (filters?.projectId) params.append('projectId', filters.projectId)
 
