@@ -56,7 +56,8 @@ export default function AuthCallbackPage() {
         await login(code)
         router.push('/')
       } catch (err) {
-        hasProcessedCallback = false
+        // Do NOT reset hasProcessedCallback — the authorization code is
+        // single-use. Retrying with the same code causes 401 loops.
         setError(
           err instanceof Error
             ? err.message
