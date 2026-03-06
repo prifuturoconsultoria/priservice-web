@@ -157,7 +157,7 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
         const profile = await getCurrentUserProfile();
         setUserProfile(profile);
       } catch (error) {
-        console.error('Error loading user profile:', error);
+        // Failed to load profile
       }
     }
     loadUserProfile();
