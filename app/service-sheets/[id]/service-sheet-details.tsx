@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { deleteServiceSheet, resendApprovalEmail } from "@/lib/service-sheets-api"
+import { useServiceSheet, useProfile } from "@/lib/hooks/use-data"
 import type { ServiceSheet } from "@/types/service-sheet"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -26,11 +27,17 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 interface ServiceSheetDetailsProps {
-  serviceSheet: ServiceSheet | null | undefined
-  userProfile: any
+  initialServiceSheet?: ServiceSheet | null
+  initialProfile?: any
 }
 
-export function ServiceSheetDetails({ serviceSheet, userProfile }: ServiceSheetDetailsProps) {
+export function ServiceSheetDetails({ initialServiceSheet, initialProfile }: ServiceSheetDetailsProps) {
+  const params = useParams()
+  const id = params.id as string
+  const { data: swrSheet } = useServiceSheet(id)
+  const { data: swrProfile } = useProfile()
+  const serviceSheet = swrSheet || initialServiceSheet
+  const userProfile = swrProfile || initialProfile
   const [deleting, setDeleting] = useState(false)
   const [resending, setResending] = useState(false)
   const router = useRouter()

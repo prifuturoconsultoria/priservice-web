@@ -39,19 +39,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { getAllProjects } from "@/lib/service-sheets-api";
 import { deleteProject } from "@/lib/service-sheets-api";
+import { useProjects } from "@/lib/hooks/use-data";
 import { format } from "date-fns";
 import { MoreHorizontal, Eye, Edit, Trash2, Search, X, Sparkles, FolderOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-interface ProjectsClientProps {
-  initialData: any[]
-}
-
-export function ProjectsClient({ initialData }: ProjectsClientProps) {
-  const [projects, setProjects] = useState(initialData);
-  const [filteredProjects, setFilteredProjects] = useState(initialData);
+export function ProjectsClient() {
+  const { data: projects = [], mutate } = useProjects();
+  const [filteredProjects, setFilteredProjects] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -85,9 +81,7 @@ export function ProjectsClient({ initialData }: ProjectsClientProps) {
     try {
       const result = await deleteProject(id);
       if (result.success) {
-        // Refresh the data
-        const projectsData = await getAllProjects();
-        setProjects(projectsData);
+        mutate();
         toast({
           title: "Sucesso!",
           description: "Projeto excluído com sucesso!",

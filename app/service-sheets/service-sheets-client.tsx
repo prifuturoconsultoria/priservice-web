@@ -60,11 +60,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
-  getAllServiceSheets,
   deleteServiceSheet,
   resendApprovalEmail,
-  getCurrentUserProfile,
 } from "@/lib/service-sheets-api";
+import { useServiceSheets, useProfile } from "@/lib/hooks/use-data";
 import type { ServiceSheet } from "@/types/service-sheet";
 import { format } from "date-fns";
 import { MoreHorizontal, Eye, Edit, Trash2, Mail, Search, Filter, Calendar, X, Sparkles, Download, Clock, ChevronUp, ChevronDown, ChevronsUpDown, FileDown, FileText, FolderOpen, Check } from "lucide-react";
@@ -75,12 +74,14 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 interface ServiceSheetsClientProps {
-  initialData: ServiceSheet[]
+  initialData?: ServiceSheet[]
 }
 
 export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
-  const [serviceSheets, setServiceSheets] = useState<ServiceSheet[]>(initialData);
-  const [filteredSheets, setFilteredSheets] = useState<ServiceSheet[]>(initialData);
+  const { data: swrData, mutate } = useServiceSheets();
+  const { data: profile } = useProfile();
+  const serviceSheets = swrData || initialData || [];
+  const [filteredSheets, setFilteredSheets] = useState<ServiceSheet[]>(serviceSheets);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [projectFilter, setProjectFilter] = useState("all");
@@ -88,7 +89,7 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
-  const [userProfile, setUserProfile] = useState<any>(null);
+  const userProfile = profile;
   const [sortField, setSortField] = useState<'project' | 'date' | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const itemsPerPage = 8;
@@ -149,19 +150,6 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
       ? <ChevronUp className="h-3 w-3 text-blue-600" />
       : <ChevronDown className="h-3 w-3 text-blue-600" />;
   };
-
-  // Load user profile to check permissions
-  useEffect(() => {
-    async function loadUserProfile() {
-      try {
-        const profile = await getCurrentUserProfile();
-        setUserProfile(profile);
-      } catch (error) {
-        // Failed to load profile
-      }
-    }
-    loadUserProfile();
-  }, []);
 
   useEffect(() => {
     let filtered = serviceSheets;
@@ -252,9 +240,7 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
     try {
       const result = await deleteServiceSheet(id);
       if (result.success) {
-        // Refresh the data
-        const response = await getAllServiceSheets();
-        setServiceSheets(response.data || []);
+        mutate();
         toast({
           title: "Sucesso!",
           description: "Ficha de serviço excluída com sucesso!",
@@ -321,7 +307,16 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
   };
 
   return (
-    <>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Todas as Fichas de Serviço</h1>
+        {userProfile?.role !== 'observer' && (
+          <Button asChild>
+            <Link href="/service-sheets/new">Criar Nova</Link>
+          </Button>
+        )}
+      </div>
+
       {/* Filters */}
       <Card>
         <CardContent className="p-4">
@@ -769,6 +764,6 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
           )}
         </CardContent>
       </Card>
-    </>
+    </div>
   );
 }

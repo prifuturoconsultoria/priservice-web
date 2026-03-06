@@ -40,35 +40,29 @@ import {
   getRoleOptions,
   type Role,
 } from "@/lib/role-translations";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useMemo } from "react";
 import { Users, RefreshCw, Shield, Search, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useUsers } from "@/lib/hooks/use-data";
 
-export function AdminUsersClient({ initialUsers }: { initialUsers: any[] }) {
+export function AdminUsersClient() {
+  const { data: users = [], mutate } = useUsers();
   const [isLoading, setIsLoading] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filteredUsers, setFilteredUsers] = useState(initialUsers);
-  const router = useRouter();
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (!searchTerm) {
-      setFilteredUsers(initialUsers);
-      return;
-    }
+  const filteredUsers = useMemo(() => {
+    if (!searchTerm) return users;
     const term = searchTerm.toLowerCase();
-    setFilteredUsers(
-      initialUsers.filter(
-        (user) =>
-          (user.fullName || user.full_name || "").toLowerCase().includes(term) ||
-          (user.email || "").toLowerCase().includes(term) ||
-          getRoleTranslation(user.role).toLowerCase().includes(term)
-      )
+    return users.filter(
+      (user: any) =>
+        (user.fullName || user.full_name || "").toLowerCase().includes(term) ||
+        (user.email || "").toLowerCase().includes(term) ||
+        getRoleTranslation(user.role).toLowerCase().includes(term)
     );
-  }, [searchTerm, initialUsers]);
+  }, [searchTerm, users]);
 
   const handleEditRole = async () => {
     if (!editingUser || !editingUser.role) return;
@@ -85,7 +79,7 @@ export function AdminUsersClient({ initialUsers }: { initialUsers: any[] }) {
         });
         setIsEditDialogOpen(false);
         setEditingUser(null);
-        router.refresh();
+        mutate();
       } else {
         toast({
           title: "Erro",
@@ -116,8 +110,62 @@ export function AdminUsersClient({ initialUsers }: { initialUsers: any[] }) {
     }
   };
 
+  const adminCount = users.filter((u: any) => u.role === 'admin').length;
+  const technicianCount = users.filter((u: any) => u.role === 'technician').length;
+  const observerCount = users.filter((u: any) => u.role === 'observer').length;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Gestão de Usuários</h1>
+        <p className="text-muted-foreground">
+          Visualize e gerencie as funções dos usuários do sistema
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total de Usuários</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{users.length}</div>
+            <p className="text-xs text-muted-foreground">Registrados no sistema</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Administradores</CardTitle>
+            <Shield className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{adminCount}</div>
+            <p className="text-xs text-muted-foreground">Com privilégios administrativos</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Técnicos</CardTitle>
+            <Shield className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{technicianCount}</div>
+            <p className="text-xs text-muted-foreground">Usuários técnicos</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Verificadores</CardTitle>
+            <Shield className="h-4 w-4 text-purple-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{observerCount}</div>
+            <p className="text-xs text-muted-foreground">Usuários verificadores</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -159,7 +207,7 @@ export function AdminUsersClient({ initialUsers }: { initialUsers: any[] }) {
             <div className="text-center py-12">
               <Users className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
               <p className="text-muted-foreground">
-                {initialUsers.length === 0
+                {users.length === 0
                   ? "Nenhum usuário encontrado."
                   : "Nenhum resultado para a busca."}
               </p>
