@@ -16,10 +16,6 @@ export function DashboardClient() {
   const { data: serviceSheets = [], isLoading } = useServiceSheets()
   const { data: profile, isLoading: profileLoading } = useProfile()
 
-  if (isLoading || profileLoading) {
-    return <DashboardLoading />
-  }
-
   const stats = useMemo(() => {
     const totalSheets = serviceSheets.length
     const pendingSheets = serviceSheets.filter((s: any) => s.status === "pending").length
@@ -76,6 +72,10 @@ export function DashboardClient() {
   const { totalSheets, pendingSheets, approvedSheets, rejectedSheets,
     approvalRate, pendingRate, rejectionRate,
     statusData, activityData, monthlyData } = stats
+
+  if (isLoading || profileLoading) {
+    return <DashboardLoading />
+  }
 
   return (
     <div className="space-y-8">
