@@ -661,7 +661,7 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
                                         </Link>
                                       </DropdownMenuItem>
                                       <DropdownMenuItem
-                                        onClick={() => handleResendEmail(sheet.id)}
+                                        onClick={(e) => { e.stopPropagation(); handleResendEmail(sheet.id); }}
                                         disabled={resendingId === sheet.id}
                                       >
                                         <Mail className="mr-2 h-4 w-4" />

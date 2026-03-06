@@ -77,11 +77,13 @@ async function apiRequest<T>(
       throw new ApiError(response.status, errorMessage)
     }
 
-    if (response.status === 204) {
+    if (response.status === 204 || response.headers.get('content-length') === '0') {
       return undefined as T
     }
 
-    return await response.json() as T
+    const text = await response.text()
+    if (!text) return undefined as T
+    return JSON.parse(text) as T
   } catch (error) {
     if (error instanceof ApiError) throw error
     throw new ApiError(0, 'Erro de conexão com o servidor')
