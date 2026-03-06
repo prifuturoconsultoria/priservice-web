@@ -39,20 +39,18 @@ function getBaseUrl(): string {
 
 /**
  * Generic API request handler with authentication
- * @param tags - Cache tags for GET requests. When provided, enables ISR-style caching (revalidate on demand).
  */
 async function apiRequest<T>(
   endpoint: string,
-  options?: RequestInit & { tags?: string[] }
+  options?: RequestInit
 ): Promise<T> {
   const baseUrl = getBaseUrl()
   const url = `${baseUrl}${endpoint}`
   const token = await getAccessToken()
-  const { tags, ...fetchOptions } = options || {}
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(fetchOptions?.headers as Record<string, string> || {}),
+    ...(options?.headers as Record<string, string> || {}),
   }
 
   if (token) {
@@ -61,9 +59,9 @@ async function apiRequest<T>(
 
   try {
     const response = await fetch(url, {
-      ...fetchOptions,
+      ...options,
       headers,
-      ...(tags ? { next: { tags } } : { cache: 'no-store' as const }),
+      cache: 'no-store',
     })
 
     if (!response.ok) {
@@ -184,7 +182,7 @@ export async function getAllServiceSheets(
     const queryString = params.toString()
     const endpoint = `/api/service-sheets${queryString ? `?${queryString}` : ''}`
 
-    const result = await apiRequest<any>(endpoint, { method: 'GET', tags: ['service-sheets'] })
+    const result = await apiRequest<any>(endpoint, { method: 'GET' })
     const rawSheets = result.content || result
     const sheets = Array.isArray(rawSheets) ? rawSheets.map(normalizeServiceSheet) : []
 
@@ -206,7 +204,7 @@ export async function getServiceSheetById(
     const user = await getUser()
     if (!user) return { success: false, error: 'Usuário não autenticado' }
 
-    const result = await apiRequest<any>(`/api/service-sheets/${id}`, { method: 'GET', tags: ['service-sheets', `service-sheet-${id}`] })
+    const result = await apiRequest<any>(`/api/service-sheets/${id}`, { method: 'GET' })
     return { success: true, data: normalizeServiceSheet(result) }
   } catch (error) {
     if (error instanceof ApiError) {
@@ -403,7 +401,7 @@ export async function getAllProjects(): Promise<any[]> {
     const user = await getUser()
     if (!user) return []
 
-    const result = await apiRequest<any>('/api/projects?size=200', { method: 'GET', tags: ['projects'] })
+    const result = await apiRequest<any>('/api/projects?size=200', { method: 'GET' })
     if (Array.isArray(result)) return result
     if (result?.content) return result.content
     return []
@@ -426,7 +424,7 @@ export async function getProjectHoursInfo(projectId: string): Promise<{
     const user = await getUser()
     if (!user) return null
 
-    const result = await apiRequest<any>(`/api/projects/${projectId}/hours`, { method: 'GET', tags: ['projects'] })
+    const result = await apiRequest<any>(`/api/projects/${projectId}/hours`, { method: 'GET' })
 
     if (!result) return null
 
@@ -448,7 +446,7 @@ export async function getProjectHoursInfo(projectId: string): Promise<{
  */
 export async function getProjectById(id: string): Promise<any | null> {
   try {
-    return await apiRequest<any>(`/api/projects/${id}`, { method: 'GET', tags: ['projects'] })
+    return await apiRequest<any>(`/api/projects/${id}`, { method: 'GET' })
   } catch (error) {
     return null
   }
@@ -518,7 +516,7 @@ export async function deleteProject(id: string): Promise<{ success: boolean; err
  */
 export async function getAllUsers(): Promise<any[]> {
   try {
-    const result = await apiRequest<any>('/api/admin/users?size=200', { method: 'GET', tags: ['users'] })
+    const result = await apiRequest<any>('/api/admin/users?size=200', { method: 'GET' })
     const users = Array.isArray(result) ? result : (result?.content || [])
     // Normalize roles to lowercase (Spring Boot returns uppercase: ADMIN, TECHNICIAN, OBSERVER)
     return users.map((u: any) => ({
