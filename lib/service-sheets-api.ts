@@ -11,6 +11,7 @@
  * on the server and makes a fetch to Spring Boot (localhost:8080).
  */
 
+import { revalidateTag } from 'next/cache'
 import { getUser, getAccessToken } from './auth'
 import type {
   ServiceSheet,
@@ -38,18 +39,20 @@ function getBaseUrl(): string {
 
 /**
  * Generic API request handler with authentication
+ * @param tags - Cache tags for GET requests. When provided, enables ISR-style caching (revalidate on demand).
  */
 async function apiRequest<T>(
   endpoint: string,
-  options?: RequestInit
+  options?: RequestInit & { tags?: string[] }
 ): Promise<T> {
   const baseUrl = getBaseUrl()
   const url = `${baseUrl}${endpoint}`
   const token = await getAccessToken()
+  const { tags, ...fetchOptions } = options || {}
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options?.headers as Record<string, string> || {}),
+    ...(fetchOptions?.headers as Record<string, string> || {}),
   }
 
   if (token) {
@@ -58,9 +61,9 @@ async function apiRequest<T>(
 
   try {
     const response = await fetch(url, {
-      ...options,
+      ...fetchOptions,
       headers,
-      cache: 'no-store',
+      ...(tags ? { next: { tags } } : { cache: 'no-store' as const }),
     })
 
     if (!response.ok) {
@@ -150,6 +153,8 @@ export async function createServiceSheet(
       body: JSON.stringify(formData),
     })
 
+    revalidateTag('service-sheets')
+    revalidateTag('projects')
     return { success: true, data: result }
   } catch (error) {
     if (error instanceof ApiError) return { success: false, error: error.message }
@@ -177,7 +182,7 @@ export async function getAllServiceSheets(
     const queryString = params.toString()
     const endpoint = `/api/service-sheets${queryString ? `?${queryString}` : ''}`
 
-    const result = await apiRequest<any>(endpoint, { method: 'GET' })
+    const result = await apiRequest<any>(endpoint, { method: 'GET', tags: ['service-sheets'] })
     const rawSheets = result.content || result
     const sheets = Array.isArray(rawSheets) ? rawSheets.map(normalizeServiceSheet) : []
 
@@ -199,7 +204,7 @@ export async function getServiceSheetById(
     const user = await getUser()
     if (!user) return { success: false, error: 'Usuário não autenticado' }
 
-    const result = await apiRequest<any>(`/api/service-sheets/${id}`, { method: 'GET' })
+    const result = await apiRequest<any>(`/api/service-sheets/${id}`, { method: 'GET', tags: ['service-sheets', `service-sheet-${id}`] })
     return { success: true, data: normalizeServiceSheet(result) }
   } catch (error) {
     if (error instanceof ApiError) {
@@ -253,6 +258,9 @@ export async function updateServiceSheet(
       method: 'PUT',
       body: JSON.stringify(formData),
     })
+    revalidateTag('service-sheets')
+    revalidateTag(`service-sheet-${id}`)
+    revalidateTag('projects')
     return { success: true, data: result }
   } catch (error) {
     if (error instanceof ApiError) {
@@ -274,6 +282,8 @@ export async function deleteServiceSheet(id: string): Promise<ApiResponse<void>>
     if (!user) return { success: false, error: 'Usuário não autenticado' }
 
     await apiRequest<void>(`/api/service-sheets/${id}`, { method: 'DELETE' })
+    revalidateTag('service-sheets')
+    revalidateTag('projects')
     return { success: true, message: 'Ficha de serviço deletada com sucesso' }
   } catch (error) {
     if (error instanceof ApiError) {
@@ -316,6 +326,8 @@ export async function approveServiceSheet(
       }
     )
 
+    revalidateTag('service-sheets')
+    revalidateTag('projects')
     return {
       success: true,
       data: result,
@@ -389,7 +401,7 @@ export async function getAllProjects(): Promise<any[]> {
     const user = await getUser()
     if (!user) return []
 
-    const result = await apiRequest<any>('/api/projects?size=200', { method: 'GET' })
+    const result = await apiRequest<any>('/api/projects?size=200', { method: 'GET', tags: ['projects'] })
     if (Array.isArray(result)) return result
     if (result?.content) return result.content
     return []
@@ -412,7 +424,7 @@ export async function getProjectHoursInfo(projectId: string): Promise<{
     const user = await getUser()
     if (!user) return null
 
-    const result = await apiRequest<any>(`/api/projects/${projectId}/hours`, { method: 'GET' })
+    const result = await apiRequest<any>(`/api/projects/${projectId}/hours`, { method: 'GET', tags: ['projects'] })
 
     if (!result) return null
 
@@ -434,7 +446,7 @@ export async function getProjectHoursInfo(projectId: string): Promise<{
  */
 export async function getProjectById(id: string): Promise<any | null> {
   try {
-    return await apiRequest<any>(`/api/projects/${id}`, { method: 'GET' })
+    return await apiRequest<any>(`/api/projects/${id}`, { method: 'GET', tags: ['projects'] })
   } catch (error) {
     return null
   }
@@ -455,6 +467,7 @@ export async function createProject(formData: any): Promise<{ success: boolean; 
         totalHours: formData.total_hours || formData.totalHours,
       }),
     })
+    revalidateTag('projects')
     return { success: true, data }
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to create project' }
@@ -476,6 +489,7 @@ export async function updateProject(id: string, formData: any): Promise<{ succes
         totalHours: formData.total_hours || formData.totalHours,
       }),
     })
+    revalidateTag('projects')
     return { success: true, data }
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to update project' }
@@ -488,6 +502,7 @@ export async function updateProject(id: string, formData: any): Promise<{ succes
 export async function deleteProject(id: string): Promise<{ success: boolean; error?: string }> {
   try {
     await apiRequest<void>(`/api/projects/${id}`, { method: 'DELETE' })
+    revalidateTag('projects')
     return { success: true }
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to delete project' }
@@ -501,7 +516,7 @@ export async function deleteProject(id: string): Promise<{ success: boolean; err
  */
 export async function getAllUsers(): Promise<any[]> {
   try {
-    const result = await apiRequest<any>('/api/admin/users?size=200', { method: 'GET' })
+    const result = await apiRequest<any>('/api/admin/users?size=200', { method: 'GET', tags: ['users'] })
     const users = Array.isArray(result) ? result : (result?.content || [])
     // Normalize roles to lowercase (Spring Boot returns uppercase: ADMIN, TECHNICIAN, OBSERVER)
     return users.map((u: any) => ({
@@ -527,6 +542,7 @@ export async function createUser(
       method: 'POST',
       body: JSON.stringify({ email, fullName, role: role.toUpperCase() }),
     })
+    revalidateTag('users')
     return { success: true, user: data, message: `Usuário ${fullName} criado com sucesso!` }
   } catch (error: any) {
     return { success: false, error: error.message || 'Falha ao criar usuário' }
@@ -542,6 +558,7 @@ export async function updateUserRole(userId: string, role: 'admin' | 'technician
       method: 'PATCH',
       body: JSON.stringify({ role: role.toUpperCase() }),
     })
+    revalidateTag('users')
     return { success: true }
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to update role' }
@@ -562,6 +579,7 @@ export async function resetUserPassword(_userId: string, _newPassword: string): 
 export async function deleteUser(userId: string): Promise<{ success: boolean; error?: string }> {
   try {
     await apiRequest<void>(`/api/admin/users/${userId}`, { method: 'DELETE' })
+    revalidateTag('users')
     return { success: true }
   } catch (error: any) {
     return { success: false, error: error.message || 'Failed to delete user' }
