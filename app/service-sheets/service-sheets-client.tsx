@@ -64,6 +64,7 @@ import {
   resendApprovalEmail,
 } from "@/lib/service-sheets-api";
 import { useServiceSheets, useProfile } from "@/lib/hooks/use-data";
+import ServiceSheetsLoading from "./loading";
 import type { ServiceSheet } from "@/types/service-sheet";
 import { format } from "date-fns";
 import { MoreHorizontal, Eye, Edit, Trash2, Mail, Search, Filter, Calendar, X, Sparkles, Download, Clock, ChevronUp, ChevronDown, ChevronsUpDown, FileDown, FileText, FolderOpen, Check } from "lucide-react";
@@ -78,7 +79,7 @@ interface ServiceSheetsClientProps {
 }
 
 export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
-  const { data: swrData, mutate } = useServiceSheets();
+  const { data: swrData, mutate, isLoading } = useServiceSheets();
   const { data: profile } = useProfile();
   const serviceSheets = swrData || initialData || [];
   const [filteredSheets, setFilteredSheets] = useState<ServiceSheet[]>(serviceSheets);
@@ -305,6 +306,10 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
       });
     }
   };
+
+  if (isLoading && !initialData) {
+    return <ServiceSheetsLoading />;
+  }
 
   return (
     <div className="flex flex-col gap-4">

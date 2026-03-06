@@ -44,9 +44,10 @@ import { useState, useEffect, useMemo } from "react";
 import { Users, RefreshCw, Shield, Search, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUsers } from "@/lib/hooks/use-data";
+import AdminUsersLoading from "./loading";
 
 export function AdminUsersClient() {
-  const { data: users = [], mutate } = useUsers();
+  const { data: users = [], mutate, isLoading: usersLoading } = useUsers();
   const [isLoading, setIsLoading] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -113,6 +114,10 @@ export function AdminUsersClient() {
   const adminCount = users.filter((u: any) => u.role === 'admin').length;
   const technicianCount = users.filter((u: any) => u.role === 'technician').length;
   const observerCount = users.filter((u: any) => u.role === 'observer').length;
+
+  if (usersLoading) {
+    return <AdminUsersLoading />;
+  }
 
   return (
     <div className="space-y-6">

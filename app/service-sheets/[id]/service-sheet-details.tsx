@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator"
 import Link from "next/link"
 import { Eye, Edit, Trash2, Mail, ArrowLeft, Clock, Calendar, User, Building2, Phone, CheckCircle, XCircle, AlertCircle, MessageSquare, MoreVertical, Type } from "lucide-react"
 import { PDFGenerator } from "@/components/pdf-generator"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,7 +35,7 @@ interface ServiceSheetDetailsProps {
 export function ServiceSheetDetails({ initialServiceSheet, initialProfile }: ServiceSheetDetailsProps) {
   const params = useParams()
   const id = params.id as string
-  const { data: swrSheet } = useServiceSheet(id)
+  const { data: swrSheet, isLoading } = useServiceSheet(id)
   const { data: swrProfile } = useProfile()
   const serviceSheet = swrSheet || initialServiceSheet
   const userProfile = swrProfile || initialProfile
@@ -76,6 +77,50 @@ export function ServiceSheetDetails({ initialServiceSheet, initialProfile }: Ser
     } finally {
       setResending(false)
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background to-muted/20">
+        <div className="container mx-auto px-4 py-4 max-w-7xl space-y-6">
+          <Skeleton className="h-8 w-40 rounded-md" />
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-6 w-20 rounded-full" />
+                <Skeleton className="h-6 w-24 rounded-md" />
+              </div>
+              <Skeleton className="h-7 w-72" />
+              <Skeleton className="h-4 w-48" />
+            </div>
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-10 w-32 rounded-md" />
+              <Skeleton className="h-10 w-24 rounded-md" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="xl:col-span-2 space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="border rounded-xl px-4 py-4 bg-card/50 backdrop-blur shadow-sm space-y-4">
+                  <Skeleton className="h-5 w-48" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                </div>
+              ))}
+            </div>
+            <div className="space-y-4">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="border rounded-xl px-4 py-4 bg-card/50 backdrop-blur shadow-sm space-y-4">
+                  <Skeleton className="h-5 w-36" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-2/3" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (!serviceSheet) {

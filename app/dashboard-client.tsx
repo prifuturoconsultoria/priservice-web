@@ -8,11 +8,17 @@ import { Progress } from "@/components/ui/progress"
 import { format, subDays, eachDayOfInterval, parseISO } from "date-fns"
 import { TrendingUp, FileText, CheckCircle, XCircle, Clock, Activity, BarChart3, PieChart } from "lucide-react"
 import { DashboardCharts } from "@/components/dashboard-charts"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useServiceSheets, useProfile } from "@/lib/hooks/use-data"
+import DashboardLoading from "./loading"
 
 export function DashboardClient() {
-  const { data: serviceSheets = [] } = useServiceSheets()
-  const { data: profile } = useProfile()
+  const { data: serviceSheets = [], isLoading } = useServiceSheets()
+  const { data: profile, isLoading: profileLoading } = useProfile()
+
+  if (isLoading || profileLoading) {
+    return <DashboardLoading />
+  }
 
   const stats = useMemo(() => {
     const totalSheets = serviceSheets.length

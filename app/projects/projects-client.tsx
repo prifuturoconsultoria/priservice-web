@@ -41,12 +41,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { deleteProject } from "@/lib/service-sheets-api";
 import { useProjects } from "@/lib/hooks/use-data";
+import ProjectsLoading from "./loading";
 import { format } from "date-fns";
 import { MoreHorizontal, Eye, Edit, Trash2, Search, X, Sparkles, FolderOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export function ProjectsClient() {
-  const { data: projects = [], mutate } = useProjects();
+  const { data: projects = [], mutate, isLoading } = useProjects();
   const [filteredProjects, setFilteredProjects] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -103,6 +104,10 @@ export function ProjectsClient() {
       setDeletingId(null);
     }
   };
+
+  if (isLoading) {
+    return <ProjectsLoading />;
+  }
 
   return (
     <>
