@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -80,7 +80,7 @@ interface ServiceSheetsClientProps {
 export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
   const { data: swrData, mutate, isLoading } = useServiceSheets();
   const { data: profile } = useProfile();
-  const serviceSheets = swrData || initialData || [];
+  const serviceSheets = useMemo(() => swrData || initialData || [], [swrData, initialData]);
   const [filteredSheets, setFilteredSheets] = useState<ServiceSheet[]>(serviceSheets);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");

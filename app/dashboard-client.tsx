@@ -12,7 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useServiceSheets, useProfile } from "@/lib/hooks/use-data"
 
 export function DashboardClient() {
-  const { data: serviceSheets = [], isLoading } = useServiceSheets()
+  const { data: rawSheets, isLoading } = useServiceSheets()
+  const serviceSheets = useMemo(() => rawSheets || [], [rawSheets])
   const { data: profile, isLoading: profileLoading } = useProfile()
 
   const stats = useMemo(() => {

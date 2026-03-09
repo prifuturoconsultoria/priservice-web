@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,7 +46,8 @@ import { MoreHorizontal, Eye, Edit, Trash2, Search, X, Sparkles, FolderOpen } fr
 import { useToast } from "@/hooks/use-toast";
 
 export function ProjectsClient() {
-  const { data: projects = [], mutate, isLoading } = useProjects();
+  const { data: rawProjects, mutate, isLoading } = useProjects();
+  const projects = useMemo(() => rawProjects || [], [rawProjects]);
   const [filteredProjects, setFilteredProjects] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);

@@ -46,7 +46,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useUsers } from "@/lib/hooks/use-data";
 
 export function AdminUsersClient() {
-  const { data: users = [], mutate, isLoading: usersLoading } = useUsers();
+  const { data: rawUsers, mutate, isLoading: usersLoading } = useUsers();
+  const users = useMemo(() => rawUsers || [], [rawUsers]);
   const [isLoading, setIsLoading] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
