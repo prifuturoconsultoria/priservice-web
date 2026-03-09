@@ -78,7 +78,7 @@ interface ServiceSheetsClientProps {
 }
 
 export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
-  const { data: swrData, mutate, isLoading } = useServiceSheets();
+  const { data: swrData, mutate, isLoading, error } = useServiceSheets();
   const { data: profile } = useProfile();
   const serviceSheets = useMemo(() => swrData || initialData || [], [swrData, initialData]);
   const [filteredSheets, setFilteredSheets] = useState<ServiceSheet[]>(serviceSheets);
@@ -308,6 +308,15 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
 
   if (isLoading && !initialData) {
     return null;
+  }
+
+  if (error) {
+    return (
+      <div className="p-8 text-center space-y-2">
+        <p className="text-destructive font-medium">Erro ao carregar fichas de serviço</p>
+        <p className="text-sm text-muted-foreground">{error.message}</p>
+      </div>
+    );
   }
 
   return (

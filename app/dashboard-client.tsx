@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useServiceSheets, useProfile } from "@/lib/hooks/use-data"
 
 export function DashboardClient() {
-  const { data: rawSheets, isLoading } = useServiceSheets()
+  const { data: rawSheets, isLoading, error } = useServiceSheets()
   const serviceSheets = useMemo(() => rawSheets || [], [rawSheets])
   const { data: profile, isLoading: profileLoading } = useProfile()
 
@@ -75,6 +75,15 @@ export function DashboardClient() {
 
   if (isLoading || profileLoading) {
     return null
+  }
+
+  if (error) {
+    return (
+      <div className="p-8 text-center space-y-2">
+        <p className="text-destructive font-medium">Erro ao carregar dados</p>
+        <p className="text-sm text-muted-foreground">{error.message}</p>
+      </div>
+    )
   }
 
   return (
