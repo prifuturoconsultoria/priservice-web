@@ -71,6 +71,7 @@ import { exportServiceSheetsToExcel } from "@/lib/excel-export";
 import { useToast } from "@/hooks/use-toast";
 import { PDFGenerator } from "@/components/pdf-generator";
 import { useRouter } from "next/navigation";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 interface ServiceSheetsClientProps {
@@ -273,8 +274,45 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
     }
   };
 
-  if (isLoading && !initialData) {
-    return null;
+  if (isLoading && serviceSheets.length === 0) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-10 w-28" />
+        </div>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-9 flex-1" />
+              <Skeleton className="h-9 w-[220px]" />
+              <Skeleton className="h-9 w-[160px]" />
+              <Skeleton className="h-9 w-[160px]" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-48" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4 py-3">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-5 w-28" />
+                  <Skeleton className="h-5 w-36" />
+                  <Skeleton className="h-5 w-24" />
+                  <Skeleton className="h-5 w-16" />
+                  <Skeleton className="h-6 w-20 rounded-full" />
+                  <Skeleton className="h-8 w-8 ml-auto" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   if (error) {

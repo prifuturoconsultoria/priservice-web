@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress"
 import { format } from "date-fns"
 import { TrendingUp, FileText, CheckCircle, XCircle, Clock, Activity, BarChart3, PieChart } from "lucide-react"
 import { DashboardCharts } from "@/components/dashboard-charts"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useDashboardStats, useProfile } from "@/lib/hooks/use-data"
 
 export function DashboardClient() {
@@ -49,7 +50,35 @@ export function DashboardClient() {
   const recentSheets = stats?.recentSheets || []
 
   if (isLoading || profileLoading) {
-    return null
+    return (
+      <div className="space-y-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-9 w-48" />
+            <Skeleton className="h-5 w-64 mt-2" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="border-l-4 border-l-muted">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-8 w-8 rounded-lg" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-3 w-32 mt-2" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card>
+          <Card><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card>
+        </div>
+      </div>
+    )
   }
 
   if (error) {
