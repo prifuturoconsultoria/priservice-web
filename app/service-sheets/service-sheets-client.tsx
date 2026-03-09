@@ -64,7 +64,6 @@ import {
   resendApprovalEmail,
 } from "@/lib/service-sheets-api";
 import { useServiceSheets, useProfile } from "@/lib/hooks/use-data";
-import ServiceSheetsLoading from "./loading";
 import type { ServiceSheet } from "@/types/service-sheet";
 import { format } from "date-fns";
 import { MoreHorizontal, Eye, Edit, Trash2, Mail, Search, Filter, Calendar, X, Sparkles, Download, Clock, ChevronUp, ChevronDown, ChevronsUpDown, FileDown, FileText, FolderOpen, Check } from "lucide-react";
@@ -308,7 +307,7 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
   };
 
   if (isLoading && !initialData) {
-    return <ServiceSheetsLoading />;
+    return null;
   }
 
   return (

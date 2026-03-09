@@ -44,7 +44,6 @@ import { useState, useEffect, useMemo } from "react";
 import { Users, RefreshCw, Shield, Search, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUsers } from "@/lib/hooks/use-data";
-import AdminUsersLoading from "./loading";
 
 export function AdminUsersClient() {
   const { data: users = [], mutate, isLoading: usersLoading } = useUsers();
@@ -116,7 +115,7 @@ export function AdminUsersClient() {
   const observerCount = users.filter((u: any) => u.role === 'observer').length;
 
   if (usersLoading) {
-    return <AdminUsersLoading />;
+    return null;
   }
 
   return (

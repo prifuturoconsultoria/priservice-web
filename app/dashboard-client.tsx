@@ -10,7 +10,6 @@ import { TrendingUp, FileText, CheckCircle, XCircle, Clock, Activity, BarChart3,
 import { DashboardCharts } from "@/components/dashboard-charts"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useServiceSheets, useProfile } from "@/lib/hooks/use-data"
-import DashboardLoading from "./loading"
 
 export function DashboardClient() {
   const { data: serviceSheets = [], isLoading } = useServiceSheets()
@@ -74,7 +73,7 @@ export function DashboardClient() {
     statusData, activityData, monthlyData } = stats
 
   if (isLoading || profileLoading) {
-    return <DashboardLoading />
+    return null
   }
 
   return (
