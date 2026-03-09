@@ -39,7 +39,7 @@ function onTokenRefreshed(newToken: string) {
 export function getStoredTokens(): { accessToken: string; refreshToken: string } | null {
   if (typeof window === 'undefined') return null
 
-  const tokensStr = sessionStorage.getItem(TOKEN_KEY)
+  const tokensStr = localStorage.getItem(TOKEN_KEY)
   if (!tokensStr) return null
 
   try {
@@ -52,7 +52,7 @@ export function getStoredTokens(): { accessToken: string; refreshToken: string }
 export function storeTokens(tokens: { accessToken: string; refreshToken: string; user?: User }): void {
   if (typeof window === 'undefined') return
 
-  sessionStorage.setItem(
+  localStorage.setItem(
     TOKEN_KEY,
     JSON.stringify({
       accessToken: tokens.accessToken,
@@ -61,14 +61,14 @@ export function storeTokens(tokens: { accessToken: string; refreshToken: string;
   )
 
   if (tokens.user) {
-    sessionStorage.setItem(USER_KEY, JSON.stringify(tokens.user))
+    localStorage.setItem(USER_KEY, JSON.stringify(tokens.user))
   }
 }
 
 export function getStoredUser(): User | null {
   if (typeof window === 'undefined') return null
 
-  const userStr = sessionStorage.getItem(USER_KEY)
+  const userStr = localStorage.getItem(USER_KEY)
   if (!userStr) return null
 
   try {
@@ -81,8 +81,8 @@ export function getStoredUser(): User | null {
 export function clearTokens(): void {
   if (typeof window === 'undefined') return
 
-  sessionStorage.removeItem(TOKEN_KEY)
-  sessionStorage.removeItem(USER_KEY)
+  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(USER_KEY)
 }
 
 export async function exchangeCodeForTokens(authorizationCode: string): Promise<TokenResponse> {

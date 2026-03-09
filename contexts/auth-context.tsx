@@ -6,6 +6,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { storeTokens, clearTokens } from '@/lib/api-client'
 
 export type UserRole = 'admin' | 'technician' | 'observer'
 
@@ -35,16 +36,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
-  // Initialize from sessionStorage (no background API call — JWT is the source of truth)
+  // Initialize from localStorage (no background API call — JWT is the source of truth)
   useEffect(() => {
-    const storedUser = sessionStorage.getItem(USER_KEY)
+    const storedUser = localStorage.getItem(USER_KEY)
     if (storedUser) {
       try {
         const parsed = JSON.parse(storedUser)
         if (parsed.role) {
           parsed.role = parsed.role.toLowerCase()
         }
-        sessionStorage.setItem(USER_KEY, JSON.stringify(parsed))
+        localStorage.setItem(USER_KEY, JSON.stringify(parsed))
         setUser(parsed)
       } catch {
         // Corrupted data — ignore
@@ -88,7 +89,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role: (data.user.role || 'technician').toLowerCase() as UserRole,
       }
 
-      sessionStorage.setItem(USER_KEY, JSON.stringify(normalizedUser))
+      // Store tokens in localStorage for direct browser-to-API calls
+      storeTokens({
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+        user: normalizedUser,
+      })
+
+      localStorage.setItem(USER_KEY, JSON.stringify(normalizedUser))
       setUser(normalizedUser)
 
       const syncResponse = await fetch('/api/sync-tokens', {
@@ -112,7 +120,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const logout = useCallback(async () => {
-    sessionStorage.removeItem(USER_KEY)
+    localStorage.removeItem(USER_KEY)
+    clearTokens()
     setUser(null)
 
     try {
@@ -139,11 +148,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           fullName: profileData.fullName || profileData.full_name,
           role: (profileData.role || 'technician').toLowerCase() as UserRole,
         }
-        sessionStorage.setItem(USER_KEY, JSON.stringify(updatedUser))
+        localStorage.setItem(USER_KEY, JSON.stringify(updatedUser))
         setUser(updatedUser)
       }
     } catch {
-      const storedUser = sessionStorage.getItem(USER_KEY)
+      const storedUser = localStorage.getItem(USER_KEY)
       if (storedUser) {
         try { setUser(JSON.parse(storedUser)) } catch {}
       }
