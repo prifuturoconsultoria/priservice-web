@@ -94,18 +94,15 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
   const { toast } = useToast();
   const router = useRouter();
 
-  // Debounce search to avoid firing API requests on every keystroke
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
+  // Search is only submitted when user clicks the button or presses Enter
+  const [submittedSearch, setSubmittedSearch] = useState("");
+  const handleSearch = () => setSubmittedSearch(searchTerm.trim());
 
   // Server-side pagination and filtering
   const { data: pageData, mutate, isLoading, error } = useServiceSheets({
     page: currentPage - 1, // API is 0-based, UI is 1-based
     size: itemsPerPage,
-    search: debouncedSearch || undefined,
+    search: submittedSearch || undefined,
     status: statusFilter !== "all" ? statusFilter : undefined,
     project: projectFilter !== "all" ? projectFilter : undefined,
     date: dateFilter || undefined,
@@ -171,7 +168,7 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearch, statusFilter, projectFilter, dateFilter]);
+  }, [submittedSearch, statusFilter, projectFilter, dateFilter]);
 
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = Math.min(startIndex + itemsPerPage, startIndex + serviceSheets.length);
@@ -346,19 +343,28 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
                   placeholder="Buscar por projeto, técnico ou cliente..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 h-9 text-sm"
+                  onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+                  className="pl-9 pr-8 h-9 text-sm"
                 />
                 {searchTerm && (
                   <Button
                     variant="ghost"
                     size="sm"
                     className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
-                    onClick={() => setSearchTerm("")}
+                    onClick={() => { setSearchTerm(""); setSubmittedSearch(""); }}
                   >
                     <X className="h-3 w-3" />
                   </Button>
                 )}
               </div>
+              <Button
+                onClick={handleSearch}
+                size="sm"
+                className="h-9 px-4 shrink-0"
+              >
+                <Search className="h-3.5 w-3.5 mr-1.5" />
+                Pesquisar
+              </Button>
 
               <Popover open={projectComboOpen} onOpenChange={setProjectComboOpen}>
                 <PopoverTrigger asChild>
@@ -479,13 +485,13 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
               </Button>
             </div>
 
-            {(searchTerm || statusFilter !== "all" || projectFilter !== "all" || dateFilter) && (
+            {(submittedSearch || statusFilter !== "all" || projectFilter !== "all" || dateFilter) && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t">
                 <span>Filtros:</span>
-                {searchTerm && (
+                {submittedSearch && (
                   <Badge variant="secondary" className="text-xs px-2 py-0 gap-1">
-                    "{searchTerm}"
-                    <X className="h-2.5 w-2.5 cursor-pointer" onClick={() => setSearchTerm("")} />
+                    "{submittedSearch}"
+                    <X className="h-2.5 w-2.5 cursor-pointer" onClick={() => { setSearchTerm(""); setSubmittedSearch(""); }} />
                   </Badge>
                 )}
                 {projectFilter !== "all" && (
@@ -507,7 +513,7 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
                   </Badge>
                 )}
                 <button
-                  onClick={() => { setSearchTerm(""); setStatusFilter("all"); setProjectFilter("all"); setDateFilter(""); }}
+                  onClick={() => { setSearchTerm(""); setSubmittedSearch(""); setStatusFilter("all"); setProjectFilter("all"); setDateFilter(""); }}
                   className="text-xs text-muted-foreground hover:text-foreground underline ml-auto"
                 >
                   Limpar tudo
