@@ -63,7 +63,7 @@ import {
   deleteServiceSheet,
   resendApprovalEmail,
 } from "@/lib/service-sheets-api";
-import { useServiceSheets, useProfile } from "@/lib/hooks/use-data";
+import { useServiceSheets, useProjects, useProfile } from "@/lib/hooks/use-data";
 import type { ServiceSheet } from "@/types/service-sheet";
 import { format } from "date-fns";
 import { MoreHorizontal, Eye, Edit, Trash2, Mail, Search, Filter, Calendar, X, Sparkles, Download, Clock, ChevronUp, ChevronDown, ChevronsUpDown, FileDown, FileText, FolderOpen, Check } from "lucide-react";
@@ -78,10 +78,7 @@ interface ServiceSheetsClientProps {
 }
 
 export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
-  const { data: swrData, mutate, isLoading, error } = useServiceSheets();
   const { data: profile } = useProfile();
-  const serviceSheets = useMemo(() => swrData || initialData || [], [swrData, initialData]);
-  const [filteredSheets, setFilteredSheets] = useState<ServiceSheet[]>(serviceSheets);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [projectFilter, setProjectFilter] = useState("all");
@@ -95,6 +92,27 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
   const itemsPerPage = 8;
   const { toast } = useToast();
   const router = useRouter();
+
+  // Debounce search to avoid firing API requests on every keystroke
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Server-side pagination and filtering
+  const { data: pageData, mutate, isLoading, error } = useServiceSheets({
+    page: currentPage - 1, // API is 0-based, UI is 1-based
+    size: itemsPerPage,
+    search: debouncedSearch || undefined,
+    status: statusFilter !== "all" ? statusFilter : undefined,
+    project: projectFilter !== "all" ? projectFilter : undefined,
+    date: dateFilter || undefined,
+  });
+
+  const serviceSheets = useMemo(() => pageData?.content || [], [pageData]);
+  const totalElements = pageData?.totalElements || 0;
+  const totalPages = pageData?.totalPages || 1;
 
   // Display hours from API (already calculated)
   const displayHours = (sheet: ServiceSheet): string => {
@@ -116,13 +134,11 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
   const [projectComboOpen, setProjectComboOpen] = useState(false);
   const [projectSearch, setProjectSearch] = useState("");
 
-  // Get unique projects for filter (with company)
-  const uniqueProjects = Array.from(
-    new Map(
-      serviceSheets
-        .filter(s => s.project?.name)
-        .map(s => [s.project!.name, { name: s.project!.name, company: s.project?.company || "" }])
-    ).values()
+  // Get projects for filter dropdown
+  const { data: allProjects } = useProjects();
+  const uniqueProjects = useMemo(() =>
+    (allProjects || []).map((p: any) => ({ name: p.name, company: p.company || "" })),
+    [allProjects]
   );
   const filteredProjectOptions = uniqueProjects.filter(p =>
     `${p.company} ${p.name}`.toLowerCase().includes(projectSearch.toLowerCase())
@@ -151,63 +167,14 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
       : <ChevronDown className="h-3 w-3 text-blue-600" />;
   };
 
+  // Reset to page 1 when filters change
   useEffect(() => {
-    let filtered = serviceSheets;
-
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (sheet) =>
-          sheet.project?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          sheet.createdBy?.fullName
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          sheet.project?.company?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((sheet) => sheet.status === statusFilter);
-    }
-
-    if (projectFilter !== "all") {
-      filtered = filtered.filter((sheet) => sheet.project?.name === projectFilter);
-    }
-
-    if (dateFilter) {
-      // Check if any line matches the date filter
-      filtered = filtered.filter((sheet) =>
-        sheet.lines?.some(line => line.serviceDate === dateFilter)
-      );
-    }
-
-    // Apply sorting
-    if (sortField) {
-      filtered.sort((a, b) => {
-        let aValue: any, bValue: any;
-
-        if (sortField === 'project') {
-          aValue = a.project?.name || '';
-          bValue = b.project?.name || '';
-        } else if (sortField === 'date') {
-          // Sort by first service date
-          aValue = a.lines && a.lines.length > 0 ? new Date(a.lines[0].serviceDate) : new Date(0);
-          bValue = b.lines && b.lines.length > 0 ? new Date(b.lines[0].serviceDate) : new Date(0);
-        }
-
-        if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
-
-    setFilteredSheets(filtered);
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, projectFilter, dateFilter, serviceSheets, sortField, sortDirection]);
+  }, [debouncedSearch, statusFilter, projectFilter, dateFilter]);
 
-  const totalPages = Math.ceil(filteredSheets.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentItems = filteredSheets.slice(startIndex, endIndex);
+  const endIndex = Math.min(startIndex + itemsPerPage, startIndex + serviceSheets.length);
+  const currentItems = serviceSheets; // Already paginated by the server
 
   const getStatusBadgeClasses = (status: string) => {
     switch (status) {
@@ -292,7 +259,7 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
 
   const handleExportExcel = () => {
     try {
-      exportServiceSheetsToExcel(filteredSheets);
+      exportServiceSheetsToExcel(serviceSheets);
       toast({
         title: "Sucesso!",
         description: "Dados exportados para Excel com sucesso!",
@@ -524,12 +491,12 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
               </CardTitle>
             </div>
             <div className="text-sm text-muted-foreground bg-muted/50 px-3 py-1 rounded-full">
-              Página {currentPage} de {Math.max(1, Math.ceil(filteredSheets.length / itemsPerPage))}
+              Página {currentPage} de {Math.max(1, Math.ceil(totalElements / itemsPerPage))}
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          {filteredSheets.length === 0 ? (
+          {totalElements === 0 ? (
             <div className="text-center py-16">
               <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
               <p className="text-muted-foreground font-medium">
@@ -727,7 +694,7 @@ export function ServiceSheetsClient({ initialData }: ServiceSheetsClientProps) {
               {totalPages > 1 && (
                 <div className="flex items-center justify-between space-x-2 pt-6 pb-2">
                   <div className="text-sm text-muted-foreground">
-                    Mostrando <span className="font-medium text-foreground">{startIndex + 1}</span> a <span className="font-medium text-foreground">{Math.min(endIndex, filteredSheets.length)}</span> de <span className="font-medium text-foreground">{filteredSheets.length}</span> resultados
+                    Mostrando <span className="font-medium text-foreground">{startIndex + 1}</span> a <span className="font-medium text-foreground">{Math.min(endIndex, totalElements)}</span> de <span className="font-medium text-foreground">{totalElements}</span> resultados
                   </div>
                   <div className="flex space-x-2">
                     <Button

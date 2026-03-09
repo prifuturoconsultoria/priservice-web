@@ -5,73 +5,48 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { format, subDays, eachDayOfInterval, parseISO } from "date-fns"
+import { format } from "date-fns"
 import { TrendingUp, FileText, CheckCircle, XCircle, Clock, Activity, BarChart3, PieChart } from "lucide-react"
 import { DashboardCharts } from "@/components/dashboard-charts"
-import { Skeleton } from "@/components/ui/skeleton"
-import { useServiceSheets, useProfile } from "@/lib/hooks/use-data"
+import { useDashboardStats, useProfile } from "@/lib/hooks/use-data"
 
 export function DashboardClient() {
-  const { data: rawSheets, isLoading, error } = useServiceSheets()
-  const serviceSheets = useMemo(() => rawSheets || [], [rawSheets])
+  const { data: stats, isLoading, error } = useDashboardStats()
   const { data: profile, isLoading: profileLoading } = useProfile()
 
-  const stats = useMemo(() => {
-    const totalSheets = serviceSheets.length
-    const pendingSheets = serviceSheets.filter((s: any) => s.status === "pending").length
-    const approvedSheets = serviceSheets.filter((s: any) => s.status === "approved").length
-    const rejectedSheets = serviceSheets.filter((s: any) => s.status === "rejected").length
+  const summary = stats?.summary || {}
+  const totalSheets = summary.totalSheets || 0
+  const pendingSheets = summary.pendingSheets || 0
+  const approvedSheets = summary.approvedSheets || 0
+  const rejectedSheets = summary.rejectedSheets || 0
+  const approvalRate = summary.approvalRate || 0
+  const pendingRate = summary.pendingRate || 0
+  const rejectionRate = summary.rejectionRate || 0
 
-    const approvalRate = totalSheets > 0 ? (approvedSheets / totalSheets) * 100 : 0
-    const pendingRate = totalSheets > 0 ? (pendingSheets / totalSheets) * 100 : 0
-    const rejectionRate = totalSheets > 0 ? (rejectedSheets / totalSheets) * 100 : 0
+  const statusData = useMemo(() => [
+    { name: 'Aprovadas', value: approvedSheets, color: '#10b981' },
+    { name: 'Pendentes', value: pendingSheets, color: '#f59e0b' },
+    { name: 'Rejeitadas', value: rejectedSheets, color: '#ef4444' }
+  ], [approvedSheets, pendingSheets, rejectedSheets])
 
-    const statusData = [
-      { name: 'Aprovadas', value: approvedSheets, color: '#10b981' },
-      { name: 'Pendentes', value: pendingSheets, color: '#f59e0b' },
-      { name: 'Rejeitadas', value: rejectedSheets, color: '#ef4444' }
-    ]
+  const activityData = useMemo(() =>
+    (stats?.activityLast7Days || []).map((d: any) => ({
+      date: d.date ? format(new Date(d.date), 'dd/MM') : '',
+      sheets: d.count || 0,
+      day: d.dayOfWeek || '',
+    })),
+    [stats?.activityLast7Days]
+  )
 
-    const last7Days = eachDayOfInterval({
-      start: subDays(new Date(), 6),
-      end: new Date()
-    })
+  const monthlyData = useMemo(() =>
+    (stats?.monthlyTrend || []).map((d: any) => ({
+      month: d.monthName || d.month || '',
+      sheets: d.count || 0,
+    })),
+    [stats?.monthlyTrend]
+  )
 
-    const activityData = last7Days.map(day => {
-      const dayStr = format(day, 'yyyy-MM-dd')
-      const sheetsForDay = serviceSheets.filter((sheet: any) =>
-        format(parseISO(sheet.createdAt), 'yyyy-MM-dd') === dayStr
-      ).length
-      return {
-        date: format(day, 'dd/MM'),
-        sheets: sheetsForDay,
-        day: format(day, 'EEEE').substring(0, 3)
-      }
-    })
-
-    const monthlyData = []
-    for (let i = 5; i >= 0; i--) {
-      const date = subDays(new Date(), i * 30)
-      const monthSheets = serviceSheets.filter((sheet: any) => {
-        const sheetDate = parseISO(sheet.createdAt)
-        return sheetDate >= subDays(date, 30) && sheetDate <= date
-      }).length
-      monthlyData.push({
-        month: format(date, 'MMM'),
-        sheets: monthSheets
-      })
-    }
-
-    return {
-      totalSheets, pendingSheets, approvedSheets, rejectedSheets,
-      approvalRate, pendingRate, rejectionRate,
-      statusData, activityData, monthlyData
-    }
-  }, [serviceSheets])
-
-  const { totalSheets, pendingSheets, approvedSheets, rejectedSheets,
-    approvalRate, pendingRate, rejectionRate,
-    statusData, activityData, monthlyData } = stats
+  const recentSheets = stats?.recentSheets || []
 
   if (isLoading || profileLoading) {
     return null
@@ -261,22 +236,22 @@ export function DashboardClient() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {serviceSheets.slice(0, 5).map((sheet: any, index: number) => (
+            {recentSheets.slice(0, 5).map((sheet: any) => (
               <div key={sheet.id} className="flex items-center justify-between p-4 rounded-xl border hover:bg-muted/40 transition-colors duration-150">
                 <div className="space-y-1">
-                  <p className="font-medium">{sheet.project?.name || sheet.subject || 'N/A'}</p>
+                  <p className="font-medium">{sheet.projectName || 'N/A'}</p>
                   <p className="text-sm text-muted-foreground">
-                    {sheet.project?.company || 'N/A'} • {sheet.lines?.[0]?.serviceDate ? format(new Date(sheet.lines[0].serviceDate), "dd/MM/yyyy") : format(new Date(sheet.createdAt), "dd/MM/yyyy")}
+                    {sheet.company || 'N/A'} • {sheet.serviceDate ? format(new Date(sheet.serviceDate), "dd/MM/yyyy") : sheet.createdAt ? format(new Date(sheet.createdAt), "dd/MM/yyyy") : 'N/A'}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    sheet.status === 'approved' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' :
-                    sheet.status === 'rejected' ? 'bg-red-50 text-red-700 ring-1 ring-red-200' :
+                    sheet.status === 'APPROVED' || sheet.status === 'approved' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' :
+                    sheet.status === 'REJECTED' || sheet.status === 'rejected' ? 'bg-red-50 text-red-700 ring-1 ring-red-200' :
                     'bg-amber-50 text-amber-700 ring-1 ring-amber-200'
                   }`}>
-                    {sheet.status === 'pending' ? 'Pendente' :
-                     sheet.status === 'approved' ? 'Aprovado' : 'Rejeitado'}
+                    {sheet.status === 'PENDING' || sheet.status === 'pending' ? 'Pendente' :
+                     sheet.status === 'APPROVED' || sheet.status === 'approved' ? 'Aprovado' : 'Rejeitado'}
                   </div>
                   <Button asChild variant="ghost" size="sm" className="text-primary hover:text-primary">
                     <Link href={`/service-sheets/${sheet.id}`}>
@@ -286,7 +261,7 @@ export function DashboardClient() {
                 </div>
               </div>
             ))}
-            {serviceSheets.length === 0 && (
+            {recentSheets.length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
                 <FileText className="h-12 w-12 mx-auto mb-3 text-muted-foreground/40" />
                 <p className="font-medium">Nenhuma ficha de serviço encontrada.</p>

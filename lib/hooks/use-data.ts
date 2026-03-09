@@ -22,11 +22,47 @@ function normalizeSheet(raw: any) {
   }
 }
 
-export function useServiceSheets() {
-  return useSWR('service-sheets', async () => {
-    const result = await apiRequest<any>('/api/service-sheets?size=500')
-    const rawSheets = result.content || result
-    return Array.isArray(rawSheets) ? rawSheets.map(normalizeSheet) : []
+export interface ServiceSheetsFilters {
+  page?: number
+  size?: number
+  search?: string
+  status?: string
+  project?: string
+  date?: string
+}
+
+export interface PaginatedResponse<T> {
+  content: T[]
+  totalElements: number
+  totalPages: number
+  number: number
+  size: number
+}
+
+export function useServiceSheets(filters: ServiceSheetsFilters = {}) {
+  const { page = 0, size = 8, search, status, project, date } = filters
+
+  // Build query string
+  const params = new URLSearchParams()
+  params.set('page', String(page))
+  params.set('size', String(size))
+  if (search) params.set('search', search)
+  if (status && status !== 'all') params.set('status', status)
+  if (project && project !== 'all') params.set('project', project)
+  if (date) params.set('date', date)
+
+  const key = `service-sheets?${params.toString()}`
+
+  return useSWR(key, async () => {
+    const result = await apiRequest<any>(`/api/service-sheets?${params.toString()}`)
+    const rawSheets = result.content || []
+    return {
+      content: Array.isArray(rawSheets) ? rawSheets.map(normalizeSheet) : [],
+      totalElements: result.totalElements || 0,
+      totalPages: result.totalPages || 1,
+      number: result.number || 0,
+      size: result.size || size,
+    } as PaginatedResponse<any>
   }, swrOptions)
 }
 
@@ -48,6 +84,12 @@ export function useUsers() {
   return useSWR('users', async () => {
     const result = await apiRequest<any>('/api/admin/users?size=500')
     return result.content || result || []
+  }, swrOptions)
+}
+
+export function useDashboardStats() {
+  return useSWR('dashboard-stats', async () => {
+    return await apiRequest<any>('/api/statistics/dashboard')
   }, swrOptions)
 }
 
