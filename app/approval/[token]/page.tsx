@@ -157,7 +157,9 @@ export default async function ApprovalPage({ params }: { params: Promise<{ token
                             {line.hours != null ? `${Number(line.hours).toFixed(1)}h` : '-'}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {line.description || '-'}
+                            {line.description ? (
+                              <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: line.description }} />
+                            ) : '-'}
                           </TableCell>
                         </TableRow>
                       ))}

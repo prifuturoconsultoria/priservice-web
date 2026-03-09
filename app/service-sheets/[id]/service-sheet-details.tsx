@@ -395,7 +395,7 @@ export function ServiceSheetDetails({ initialServiceSheet, initialProfile }: Ser
                               <TableCell className="font-mono text-xs">{line.endTime?.substring(0, 5)}</TableCell>
                               <TableCell className="text-xs md:text-sm max-w-xs">
                                 {line.description ? (
-                                  <span className="text-muted-foreground">{line.description}</span>
+                                  <div className="text-muted-foreground prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: line.description }} />
                                 ) : (
                                   <span className="text-muted-foreground italic">-</span>
                                 )}
